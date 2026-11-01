@@ -1,4 +1,4 @@
-import { modelCatalog } from "@/src/server";
+import { modelCatalog, withUser } from "@/src/server";
 
 /**
  * The model picker's data (model-control wave): pi-ai's configured-provider
@@ -6,6 +6,9 @@ import { modelCatalog } from "@/src/server";
  * model's SUPPORTED thinking levels (per its thinkingLevelMap). Static
  * catalog: no network, stable within a pi-ai version.
  */
-export async function GET() {
+async function handleGET() {
 	return Response.json(modelCatalog());
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

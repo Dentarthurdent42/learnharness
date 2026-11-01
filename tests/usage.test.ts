@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 
 import { chatStore } from "../src/store/chats.ts";
 import { graphStore } from "../src/store/graph.ts";
-import { PATHS, SOURCES_FILE } from "../config.ts";
+import { PATHS, sourcesFile } from "../config.ts";
 import { callCost, contextWindow, jobCost, sessionCost, sumSteps, turnCost } from "../src/core/prices.ts";
 import type { CallUsage, ExtractionRunUsage, JobRecord, TurnUsage } from "../src/core/contracts.ts";
 
@@ -274,8 +274,8 @@ test("appendSourceUsage: appends to the source record, idempotent per startedAt,
 	// this test (same discipline as the chat fixture files).
 	fs.mkdirSync(PATHS.graph, { recursive: true });
 	let bak: string | undefined;
-	if (fs.existsSync(SOURCES_FILE)) bak = `${SOURCES_FILE}.w5test.bak`;
-	if (bak) fs.renameSync(SOURCES_FILE, bak);
+	if (fs.existsSync(sourcesFile())) bak = `${sourcesFile()}.w5test.bak`;
+	if (bak) fs.renameSync(sourcesFile(), bak);
 	try {
 		const runEntry = (startedAt: number): ExtractionRunUsage => ({
 			startedAt,
@@ -301,7 +301,7 @@ test("appendSourceUsage: appends to the source record, idempotent per startedAt,
 		// Unknown ids are a silent no-op (nothing to bill against).
 		graphStore.appendSourceUsage("src_nope", runEntry(1));
 	} finally {
-		fs.rmSync(SOURCES_FILE, { force: true });
-		if (bak) fs.renameSync(bak, SOURCES_FILE);
+		fs.rmSync(sourcesFile(), { force: true });
+		if (bak) fs.renameSync(bak, sourcesFile());
 	}
 });

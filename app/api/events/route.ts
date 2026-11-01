@@ -6,10 +6,13 @@
  * server seam (events-stream.ts); the framework route stays a thin
  * wrapper (the import law; tests drive the seam directly).
  */
-import { eventsResponse } from "@/src/server";
+import { eventsResponse, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export function GET(): Response {
+function handleGET(): Response {
 	return eventsResponse();
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

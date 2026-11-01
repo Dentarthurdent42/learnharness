@@ -25,6 +25,7 @@
  * dismissal per chat (last write wins — there is one dock, one discard).
  */
 
+import { ScopedMap } from "../../tenancy.ts";
 import { ChatInputError, dismissAppends, emit } from "../core";
 import type { ChatStore } from "../core/ports.ts";
 
@@ -37,9 +38,10 @@ interface LhGlobal {
 	__lhParkedDismissals?: Map<string, ParkedDismissal>;
 }
 
-function registry(): Map<string, ParkedDismissal> {
+// Per-user view (tenancy.ts): cloud mode namespaces keys by user.
+function registry(): ScopedMap<ParkedDismissal> {
 	const g = globalThis as typeof globalThis & LhGlobal;
-	return (g.__lhParkedDismissals ??= new Map<string, ParkedDismissal>());
+	return new ScopedMap((g.__lhParkedDismissals ??= new Map<string, ParkedDismissal>()));
 }
 
 /** Park (or overwrite) the chat's dismissal intent. Called by the dismiss

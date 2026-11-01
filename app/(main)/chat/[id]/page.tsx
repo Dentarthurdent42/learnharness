@@ -1,3 +1,4 @@
+import { asPageUser } from "@/lib/page-auth";
 import { notFound } from "next/navigation";
 import { Chat } from "@/components/chat";
 import { slotsConfigured } from "@/src/core";
@@ -5,7 +6,7 @@ import { compactionInFlight, getChat, isTurnRunning, readSettingsRecord } from "
 
 export const dynamic = "force-dynamic";
 
-export default async function ChatPage({
+async function ChatPageBody({
 	params,
 	searchParams,
 }: {
@@ -37,4 +38,10 @@ export default async function ChatPage({
 			initiallyCompacting={compactionInFlight(chat.id)}
 		/>
 	);
+}
+
+// Cloud mode: rendered inside the signed-in user's data scope; signed out
+// → /login (lib/page-auth.ts). Desktop: the body directly.
+export default function ChatPage(props: Parameters<typeof ChatPageBody>[0]) {
+	return asPageUser(() => ChatPageBody(props));
 }

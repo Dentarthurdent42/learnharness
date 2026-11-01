@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { DumbbellIcon, LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from "lucide-react";
+import { signOut, useAccount } from "@/components/account";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -839,6 +840,7 @@ function SessionsSidebar() {
 								Settings
 							</button>
 						</Hint>
+						<AccountRows />
 					</div>
 				</div>
 
@@ -931,5 +933,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 			    matters for the events it dispatches, never for DOM priority. */}
 			<KeyboardShortcuts />
 		</SettingsDialogProvider>
+	);
+}
+
+/** Cloud mode's account rows under Settings (2026-11): Accounts for the
+ *  admin, Sign out for everyone. Desktop renders nothing. */
+function AccountRows() {
+	const account = useAccount();
+	if (!account?.cloud || !account.user) return null;
+	const row =
+		"flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
+	return (
+		<>
+			{account.user.role === "admin" && (
+				<Link href="/admin" className={row} data-testid="admin-entry">
+					<UsersIcon className="size-3" />
+					Accounts
+				</Link>
+			)}
+			<button type="button" onClick={() => void signOut()} className={row} data-testid="sign-out" title={`Signed in as ${account.user.username}`}>
+				<LogOutIcon className="size-3" />
+				Sign out
+			</button>
+		</>
 	);
 }

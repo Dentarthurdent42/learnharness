@@ -25,10 +25,14 @@
  * ui-stream subscribe() pattern.
  */
 import { subscribe, type ServerEvent } from "../core/events.ts";
+import { CLOUD_MODE, requireUser } from "../../tenancy.ts";
 
 /** One window's subscription as an SSE Response. */
 export function eventsResponse(): Response {
 	const encoder = new TextEncoder();
+	// Cloud mode: this connection's user, captured at open — events emitted
+	// in any other user's scope (or in none) never reach this socket.
+	const viewer = CLOUD_MODE ? requireUser().userId : undefined;
 	let teardown: (() => void) | undefined;
 	const stream = new ReadableStream<Uint8Array>({
 		start(controller) {
@@ -57,7 +61,8 @@ export function eventsResponse(): Response {
 			// Attach FIRST, synchronously: no event can fall between
 			// construction and subscription (single-threaded — the same
 			// attach-then-replay law as ui-stream's subscribe()).
-			unsubscribe = subscribe((event: ServerEvent) => {
+			unsubscribe = subscribe((event: ServerEvent, owner?: string) => {
+				if (CLOUD_MODE && owner !== viewer) return;
 				const { type, ...payload } = event;
 				frame(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 			});

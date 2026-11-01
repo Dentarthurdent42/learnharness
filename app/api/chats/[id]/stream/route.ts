@@ -12,12 +12,15 @@
  * wrapper over the server barrel (the import law); tests drive the seams
  * (turn-runs + ui-stream) directly.
  */
-import { getChat, runningTurn, piTurnResponse, settledTurnResponse } from "@/src/server";
+import { getChat, piTurnResponse, runningTurn, settledTurnResponse, withUser } from "@/src/server";
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+async function handleGET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
 	const { id } = await ctx.params;
 	if (!getChat(id)) return Response.json({ error: "Unknown chat" }, { status: 404 });
 	const handle = runningTurn(id);
 	if (!handle) return settledTurnResponse();
 	return piTurnResponse(handle);
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { guardedFetch } from "./net-guard.ts";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { serverExecute } from "../tool-execute.ts";
 // The search-hit shape lives in the core port since the search wave
@@ -81,7 +82,8 @@ function htmlToMarkdown(html: string): { title: string; content: string } | null
 }
 
 async function fetchAndExtract(url: string): Promise<string> {
-	const resp = await fetch(url, {
+	// guardedFetch: cloud mode refuses non-public destinations (net-guard.ts).
+	const resp = await guardedFetch(url, {
 		headers: {
 			"User-Agent": USER_AGENT,
 			Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

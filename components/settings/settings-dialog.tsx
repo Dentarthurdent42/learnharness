@@ -45,6 +45,7 @@ import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { canManageKeys, useAccount } from "@/components/account";
 import { KeysSection } from "./keys-section.tsx";
 import { Hint } from "@/components/ui/hint";
 import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
@@ -179,6 +180,11 @@ export function SettingsDialogBody({
 			window.removeEventListener(MENU_CLOSE_EVENT, onClose);
 		};
 	}, []);
+	// Cloud mode (2026-11): the shared key store is the admin's — everyone
+	// else never sees the Keys section (components/account.tsx).
+	const account = useAccount();
+	const keysAllowed = canManageKeys(account);
+	const sections = SECTIONS.filter((s) => s.id !== "keys" || keysAllowed);
 	const [active, setActive] = useState<SectionId>(initialSection);
 	// A deep-link fired while the dialog is ALREADY open (first exercised by
 	// the wave-6 embedding picker's "Add a provider key first…" link — the
@@ -307,7 +313,7 @@ export function SettingsDialogBody({
 					data-testid="settings-nav"
 					className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-2"
 				>
-					{SECTIONS.map((s) => (
+					{sections.map((s) => (
 						<button
 							key={s.id}
 							type="button"
@@ -375,9 +381,14 @@ export function SettingsDialogBody({
 									</SettingsRow>
 								</SettingsSection>
 							)}
-							{active === "keys" && (
+							{active === "keys" && keysAllowed && (
 								<SettingsSection title="Keys" testid="section-keys">
 									<KeysSection initialRow={initialRow ?? undefined} />
+								</SettingsSection>
+							)}
+							{active === "keys" && !keysAllowed && account?.cloud && (
+								<SettingsSection title="Keys" testid="section-keys">
+									<p className="px-1 text-sm text-muted-foreground">API keys on this server are managed by your admin.</p>
 								</SettingsSection>
 							)}
 							{active === "agent" && (

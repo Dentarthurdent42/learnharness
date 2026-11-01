@@ -21,6 +21,7 @@ import { readTool } from "./read.ts";
 import { lsTool } from "./ls.ts";
 import { findTool } from "./find.ts";
 import { grepTool } from "./grep.ts";
+import { learnerFsTools } from "./fs-shared.ts";
 import { jobTools, type JobToolContext } from "./jobs.ts";
 import { proberGraphTools, type GraphToolContext } from "./graph.ts";
 import { activeProblemOf } from "../../core/native-messages.ts";
@@ -238,12 +239,10 @@ export function practiceTools(ctx: PracticeToolContext): Record<string, AgentToo
 	return healToolRecord({
 		problem: problemTool(gate, ctx.graphNodes),
 		conclude: concludeTool(gate),
-		read: readTool,
-		ls: lsTool,
-		find: findTool,
-		grep: grepTool,
+		// Cloud mode drops the set (fs-shared.ts learnerFsTools).
+		...learnerFsTools({ read: readTool, ls: lsTool, find: findTool, grep: grepTool }),
 		...(jobs?.research ? { research: jobs.research } : {}),
-		...(jobs ? { pdf: jobs.pdf! } : {}),
+		...(jobs?.pdf ? { pdf: jobs.pdf } : {}),
 		...(ctx.graph ? proberGraphTools(ctx.graph) : {}),
 	});
 }
