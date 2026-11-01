@@ -70,10 +70,17 @@ export type ServerEvent<K extends ServerEventType = ServerEventType> = {
 	type: K;
 } & ServerEvents[K];
 
-export type ServerEventListener = (event: ServerEvent) => void;
+/** `owner` is the emitting context's tenancy tag (cloud mode: the user
+ *  id; desktop: undefined) — the SSE route delivers only its own user's
+ *  events. */
+export type ServerEventListener = (event: ServerEvent, owner?: string) => void;
 
 interface LhEventsGlobal {
 	__lhEventBus?: Set<ServerEventListener>;
+	/** The tenancy tag source, installed by the server's tenancy seam
+	 *  (tenancy.ts) — injected through globalThis so the core stays free of
+	 *  node:async_hooks. Absent (browser, desktop tests): no tag. */
+	__lhEventOwner?: () => string | undefined;
 }
 
 /** The shared listener set — globalThis-backed so every Next module entry
@@ -97,11 +104,12 @@ export function subscribe(listener: ServerEventListener): () => void {
  *  listener throwing must never break the others or the emitter: each
  *  call is isolated, the failure logged, the loop continues. */
 export function emit<K extends ServerEventType>(type: K, payload: ServerEvents[K]): void {
+	const owner = (globalThis as typeof globalThis & LhEventsGlobal).__lhEventOwner?.();
 	// Snapshot: a listener that unsubscribes (or subscribes) mid-emit must
 	// not mutate the set under iteration.
 	for (const listener of [...listeners()]) {
 		try {
-			listener({ type, ...payload } as ServerEvent);
+			listener({ type, ...payload } as ServerEvent, owner);
 		} catch (err) {
 			console.error(`[events] listener failed on ${type}:`, err);
 		}

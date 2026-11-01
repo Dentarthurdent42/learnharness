@@ -16,14 +16,17 @@
  * PUT/DELETE /api/settings/prompts/[...segment].
  */
 
-import { effectivePromptSegments, readSettingsRecord } from "@/src/server";
+import { effectivePromptSegments, readSettingsRecord, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function handleGET() {
 	const switches = readSettingsRecord()?.agent?.prompts ?? {};
 	return Response.json({
 		prober: effectivePromptSegments("prober", switches),
 		teacher: effectivePromptSegments("teacher", switches),
 	});
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

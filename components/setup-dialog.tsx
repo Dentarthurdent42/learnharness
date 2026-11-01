@@ -32,6 +32,7 @@
  * CMU title, z-50.
  */
 
+import { canManageKeys, useAccount } from "@/components/account";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
@@ -299,6 +300,8 @@ export function SetupDialog({
 	// configuring (browsing stays possible; the gate is the send
 	// interception, not this dialog). An open slot menu eats Esc first
 	// (and any click outside it); only a bare Esc closes the dialog.
+	// Cloud mode: only the admin fills the shared key store (components/account.tsx).
+	const account = useAccount();
 	useEffect(() => {
 		if (!open) return;
 		const onKey = (e: KeyboardEvent) => {
@@ -340,6 +343,7 @@ export function SetupDialog({
 	if (!open) return null;
 
 	const stage = failed ? "keys" : setupStage(body ? body.providers : null);
+	const keysAllowed = canManageKeys(account);
 	const allPicked = SLOT_ORDER.every((s) => picked[s]);
 
 	/** Stage 1's save: PUT the pasted key, dispatch the keys signal, and
@@ -426,6 +430,12 @@ export function SetupDialog({
 						{failed ? (
 							<p className="text-sm text-foreground">
 								Model catalog could not be loaded. Check the connection and retry.
+							</p>
+						) : !keysAllowed ? (
+							// Cloud mode, not the admin (2026-11): the shared key store
+							// isn't theirs to fill — say who can.
+							<p className="text-sm text-foreground" data-testid="setup-keys-admin">
+								No AI provider keys have been added to this server yet. Ask your admin to add one.
 							</p>
 						) : (
 							<SetupKeysBody

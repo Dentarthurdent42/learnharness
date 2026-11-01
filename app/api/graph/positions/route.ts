@@ -9,11 +9,11 @@
  *   PUT → 200 {positions: {...}} with whatever survived sanitizing
  *         (empty object = nothing written).
  */
-import { commitPositions } from "@/src/server";
+import { commitPositions, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function PUT(request: Request) {
+async function handlePUT(request: Request) {
 	let body: unknown;
 	try {
 		body = await request.json();
@@ -22,3 +22,6 @@ export async function PUT(request: Request) {
 	}
 	return Response.json({ positions: commitPositions(body) });
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const PUT = withUser(handlePUT);

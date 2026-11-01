@@ -16,10 +16,19 @@
  * file, and `shadowedByEnv` explains why a saved key is not the live one
  * (env always wins).
  */
-import { keyStatuses, providerKeyList } from "@/src/server";
+import { CLOUD_MODE, currentUser } from "@/tenancy";
+import { keyStatuses, providerKeyList, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-	return Response.json({ keys: keyStatuses(), providers: providerKeyList() });
+async function handleGET() {
+	// Cloud mode: everyone may see WHICH keys exist (the setup prompt and
+	// the search-engine picker depend on it) — only the admin sees even the
+	// masked tails. Editing stays admin-only ([id]/route.ts).
+	const admin = !CLOUD_MODE || currentUser()?.role === "admin";
+	const keys = admin ? keyStatuses() : keyStatuses().map((k) => ({ ...k, masked: null }));
+	return Response.json({ keys, providers: providerKeyList() });
 }
+
+// Cloud mode: signed-in users only (presence only for non-admins, above).
+export const GET = withUser(handleGET);

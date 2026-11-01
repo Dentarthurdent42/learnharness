@@ -1,6 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { CLOUD_MODE } from "../../../tenancy.ts";
 
 /**
  * Shared plumbing for the learner-filesystem tools (ls / find / grep) —
@@ -198,4 +200,17 @@ export async function isBinaryFile(filePath: string): Promise<boolean> {
 export function truncateGrepLine(line: string): { text: string; wasTruncated: boolean } {
 	if (line.length <= GREP_MAX_LINE_LENGTH) return { text: line, wasTruncated: false };
 	return { text: `${line.slice(0, GREP_MAX_LINE_LENGTH)}… [truncated]`, wasTruncated: true };
+}
+
+/**
+ * CLOUD MODE (owner ruling, 2026-11): the learner-filesystem set is OFF.
+ * On a shared server the "learner's home" is the server's — these tools
+ * would read other users' data and the server's secrets. Registries
+ * spread this gate over their read/ls/find/grep entries; the pdf job (a
+ * local-path reader too) rides the same gate (localFileToolsEnabled).
+ */
+export const localFileToolsEnabled = !CLOUD_MODE;
+
+export function learnerFsTools<T extends Record<string, AgentTool<any>>>(tools: T): T | Record<string, never> {
+	return localFileToolsEnabled ? tools : {};
 }

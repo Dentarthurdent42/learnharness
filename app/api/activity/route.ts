@@ -5,10 +5,13 @@
  * core/prices.ts. See that module's header for why /api/jobs stays
  * chat-scoped and untouched.
  */
-import { activityFeed } from "@/src/server";
+import { activityFeed, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function handleGET() {
 	return Response.json(activityFeed());
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

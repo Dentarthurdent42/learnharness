@@ -48,6 +48,7 @@ import { emit } from "../core/events.ts";
 import type { ChatStore } from "../core/ports.ts";
 import type { PiEngine } from "../agent/models.ts";
 import { runSubagent } from "../agent/subagents/pi-run.ts";
+import { ScopedMap } from "../../tenancy.ts";
 
 /** The summarizer's system prompt — server-owned operational framing,
  *  not model-facing doctrine (buildCompactionPrompt carries the shape). */
@@ -114,8 +115,9 @@ interface CompactionState {
 	inFlight: Map<string, Promise<void>>;
 }
 const g = globalThis as typeof globalThis & { __lhCompaction?: CompactionState };
-function state(): CompactionState {
-	return (g.__lhCompaction ??= { inFlight: new Map() });
+// Per-user view (tenancy.ts): cloud mode namespaces keys by user.
+function state(): { inFlight: ScopedMap<Promise<void>> } {
+	return { inFlight: new ScopedMap((g.__lhCompaction ??= { inFlight: new Map() }).inFlight) };
 }
 
 /** Is a compaction running for this chat? (The client status event's

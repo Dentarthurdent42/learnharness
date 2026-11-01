@@ -34,7 +34,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { LEDGER_FILES, POSITIONS_FILE, SOURCES_FILE } from "../../config.ts";
+import { LEDGER_FILES, positionsFile, sourcesFile } from "../../config.ts";
+import { CLOUD_MODE } from "../../tenancy.ts";
 import { assertGraphFormat, ensureGraphFormat } from "./graph-format.ts";
 import type {
 	GraphChain,
@@ -241,7 +242,7 @@ export const graphStore: GraphStore = {
 function readPositionMap(): Record<string, Position> {
 	let raw: string;
 	try {
-		raw = fs.readFileSync(POSITIONS_FILE, "utf-8");
+		raw = fs.readFileSync(positionsFile(), "utf-8");
 	} catch {
 		return {}; // no ledger yet — nothing has ever settled
 	}
@@ -259,14 +260,14 @@ function readPositionMap(): Record<string, Position> {
 }
 
 function writePositionMap(positions: Record<string, Position>): void {
-	fs.mkdirSync(path.dirname(POSITIONS_FILE), { recursive: true });
+	fs.mkdirSync(path.dirname(positionsFile()), { recursive: true });
 	// Tmp + rename — the same crash-safety rewriteLedgers uses two blocks
 	// up (a9339b3 UI flag): a torn write must never replace the ledger
 	// with a half-written file the reader parses as empty.
-	const tmp = `${POSITIONS_FILE}.tmp-${crypto.randomUUID().slice(0, 8)}`;
+	const tmp = `${positionsFile()}.tmp-${crypto.randomUUID().slice(0, 8)}`;
 	try {
 		fs.writeFileSync(tmp, JSON.stringify({ positions, updatedAt: new Date().toISOString() }, null, "\t"), "utf-8");
-		fs.renameSync(tmp, POSITIONS_FILE);
+		fs.renameSync(tmp, positionsFile());
 	} catch (err) {
 		try {
 			fs.unlinkSync(tmp);
@@ -286,7 +287,7 @@ function readSourceMap(): Record<string, NotesSource> {
 	assertGraphFormat(); // honest refusal on a newer-stamped data dir
 	let raw: string;
 	try {
-		raw = fs.readFileSync(SOURCES_FILE, "utf-8");
+		raw = fs.readFileSync(sourcesFile(), "utf-8");
 	} catch {
 		return {};
 	}
@@ -304,15 +305,17 @@ function readSourceMap(): Record<string, NotesSource> {
 }
 
 function writeSourceMap(map: Record<string, NotesSource>): void {
-	fs.mkdirSync(path.dirname(SOURCES_FILE), { recursive: true });
+	fs.mkdirSync(path.dirname(sourcesFile()), { recursive: true });
 	ensureGraphFormat(); // the lazy format stamp (graph-format.ts)
-	fs.writeFileSync(SOURCES_FILE, JSON.stringify(map, null, "\t"), "utf-8");
+	fs.writeFileSync(sourcesFile(), JSON.stringify(map, null, "\t"), "utf-8");
 }
 
 // ─── one-way purges at adapter load: dead ledgers are exactly the confusion
 // the cleanup removes (owner doctrine — nothing reads them, nothing writes
 // them, a stale file lying around is a lie). ────────────────────────────────
-{
+// Desktop only: cloud data dirs are born after these ledgers died (and a
+// module load runs in no user's scope — config.ts would refuse the path).
+if (!CLOUD_MODE) {
 	const graphDir = path.dirname(LEDGER_FILES.nodes);
 	for (const legacy of ["edges.jsonl", "events.jsonl"]) {
 		const file = path.join(graphDir, legacy);

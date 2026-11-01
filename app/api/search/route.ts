@@ -9,10 +9,13 @@
  * search API key", or the pinned-engine-key-missing case).
  */
 
-import { searchStatus } from "@/src/server";
+import { searchStatus, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function handleGET() {
 	return Response.json(searchStatus());
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

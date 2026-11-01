@@ -20,15 +20,17 @@
  * chat turns are minutes at most, so 30 minutes is far on the safe side.
  */
 
+import { ScopedMap } from "../../tenancy.ts";
 import { emit } from "../core/events.ts";
 
 interface LhGlobal {
 	__lhTurnRegistry?: Map<string, number>;
 }
 
-function registry(): Map<string, number> {
+// Per-user view (tenancy.ts): cloud mode namespaces keys by user.
+function registry(): ScopedMap<number> {
 	const g = globalThis as typeof globalThis & LhGlobal;
-	return (g.__lhTurnRegistry ??= new Map<string, number>());
+	return new ScopedMap((g.__lhTurnRegistry ??= new Map<string, number>()));
 }
 
 const inFlight = registry();

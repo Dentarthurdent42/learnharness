@@ -18,13 +18,16 @@
  * (status error "Aborted by learner" + the abort steer); the runner only unwinds.
  */
 
+import { ScopedMap } from "../../../tenancy.ts";
+
 interface LhAbortGlobal {
 	__lhJobAborts?: Map<string, AbortController>;
 }
 
-function registry(): Map<string, AbortController> {
+// Per-user view (tenancy.ts): cloud mode namespaces job ids by user.
+function registry(): ScopedMap<AbortController> {
 	const g = globalThis as typeof globalThis & LhAbortGlobal;
-	return (g.__lhJobAborts ??= new Map());
+	return new ScopedMap((g.__lhJobAborts ??= new Map()));
 }
 
 /** The runner registers its controller at job start (idempotent overwrite). */

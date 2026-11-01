@@ -20,9 +20,9 @@
  * fires both).
  */
 import { ChatInputError, dismissAppends, emit, parseDismissInput } from "@/src/core";
-import { getChat, isTurnRunning, parkDismissal, stores } from "@/src/server";
+import { getChat, isTurnRunning, parkDismissal, stores, withUser } from "@/src/server";
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+async function handlePOST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
 	const { id } = await ctx.params;
 	const chat = getChat(id);
 	if (!chat) return Response.json({ error: "Unknown chat" }, { status: 404 });
@@ -63,3 +63,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 	emit("record-changed", { chatId: id });
 	return Response.json({ ok: true });
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const POST = withUser(handlePOST);

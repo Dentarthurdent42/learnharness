@@ -26,6 +26,7 @@ import type {
 import { getGraph, mergeFindings, type DerivedGraph, type EmissionStats, type GraphDeps } from "../../core/graph.ts";
 import type { GraphStore } from "../../core/ports.ts";
 import { emit } from "../../core/events.ts";
+import { ScopedMap, ScopedSet } from "../../../tenancy.ts";
 import { settleGraphLayout } from "../../core/layout-settle.ts";
 import { batchRuns, coverageOf, messageViewLines } from "../../core/coverage.ts";
 import type { LhMessage } from "../../core/native-messages.ts";
@@ -674,9 +675,27 @@ interface LhExtractionGlobal {
  *  one truth — the same idiom as the turn, wake, and abort registries
  *  (moved 2026-09-19, the observability-accuracy wave; also makes the
  *  single-flight guard cross route instances). */
-function runs(): NonNullable<LhExtractionGlobal["__lhExtractionRuns"]> {
+function rawRuns(): NonNullable<LhExtractionGlobal["__lhExtractionRuns"]> {
 	const g = globalThis as typeof globalThis & LhExtractionGlobal;
 	return (g.__lhExtractionRuns ??= { running: new Map(), inFlight: new Set(), lastStartedAt: 0 });
+}
+
+/** The registries as the CURRENT USER sees them (tenancy.ts): cloud mode
+ *  namespaces every key by user, so listings, aborts and the single-flight
+ *  guard never cross users. Desktop: the plain registries. lastStartedAt
+ *  stays process-wide (it only has to be monotonic). */
+function runs() {
+	const raw = rawRuns();
+	return {
+		running: new ScopedMap(raw.running),
+		inFlight: new ScopedSet(raw.inFlight),
+		get lastStartedAt() {
+			return raw.lastStartedAt;
+		},
+		set lastStartedAt(v: number) {
+			raw.lastStartedAt = v;
+		},
+	};
 }
 
 /** In-flight pipeline runs (oldest first) — the /api/graph/status payload. */

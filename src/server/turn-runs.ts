@@ -26,15 +26,17 @@
  * write-ahead record + liveness TTL recovery cover the next mount.
  */
 
+import { ScopedMap } from "../../tenancy.ts";
 import type { PiTurnHandle } from "./pi/ui-stream.ts";
 
 interface LhTurnRunsGlobal {
 	__lhTurnRuns?: Map<string, PiTurnHandle>;
 }
 
-function runs(): Map<string, PiTurnHandle> {
+// Per-user view (tenancy.ts): cloud mode namespaces keys by user.
+function runs(): ScopedMap<PiTurnHandle> {
 	const g = globalThis as typeof globalThis & LhTurnRunsGlobal;
-	return (g.__lhTurnRuns ??= new Map<string, PiTurnHandle>());
+	return new ScopedMap((g.__lhTurnRuns ??= new Map<string, PiTurnHandle>()));
 }
 
 /** Register the chat's running turn (chat-handler, right after the turn

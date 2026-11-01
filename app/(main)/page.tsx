@@ -1,3 +1,4 @@
+import { asPageUser } from "@/lib/page-auth";
 import { Home } from "@/components/home";
 import { readSettingsRecord } from "@/src/server";
 import { resolveSettings, slotsConfigured } from "@/src/core";
@@ -7,7 +8,7 @@ import { resolveSettings, slotsConfigured } from "@/src/core";
 // the record (dynamic routes aren't cached client-side).
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+function HomePageBody() {
 	// First-run gate (model-slots wave): chats cannot start until the user
 	// has picked all three slots — the dock shows the CTA while the raw
 	// record's models section lacks any slot pin.
@@ -19,4 +20,10 @@ export default function HomePage() {
 	return (
 		<Home initialConfigured={slotsConfigured(record?.models)} rendering={rendering} />
 	);
+}
+
+// Cloud mode: rendered inside the signed-in user's data scope; signed out
+// → /login (lib/page-auth.ts). Desktop: the body directly.
+export default function HomePage() {
+	return asPageUser(() => HomePageBody());
 }
