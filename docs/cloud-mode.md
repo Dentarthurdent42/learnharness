@@ -27,7 +27,7 @@ Passwords are stored as scrypt hashes. Session and link tokens are stored only a
 - **Request scope.** Every `/api` route is wrapped in `withUser` (`src/server/auth.ts`), and every data-reading page in `asPageUser` (`lib/page-auth.ts`). The session cookie resolves to an account, and the handler runs inside `runAsUser` (`tenancy.ts`, an `AsyncLocalStorage`). Background work started by the request (turns, jobs, extraction) inherits the scope.
 - **Paths.** The data paths in `config.ts` are getters resolved per call against the current user. **Reading one outside a user scope throws**, so a missed propagation is an error, never a shared directory.
 - **In-memory registries.** Turn runs, liveness, compaction, extraction runs, job aborts and the wake pipeline are keyed per user through `ScopedMap`. The event bus tags each event with its emitting user, and `/api/events` delivers only the viewer's own events.
-- **Agent sandboxing.** The learner-filesystem tools (`read`, `ls`, `find`, `grep`) and the `pdf` job read local paths, so cloud mode drops them. `web_fetch` and `web_fetch_pdf` refuse non-public destinations: the literal host, the socket's DNS answer, and every redirect hop are all checked (`src/agent/tools/net-guard.ts`).
+- **Agent sandboxing.** The learner-filesystem tools (`read`, `ls`, `find`, `grep`) and the `pdf` job read local paths, so cloud mode drops them. `web_fetch` and `web_fetch_pdf` refuse non-public destinations: the literal host, the socket's DNS answer, and every redirect hop are all checked (`src/agent/tools/net-guard.ts`). Headless Chrome pages (agent-built demos and figures) may load only public web addresses and their own job's files.
 
 ## Accounts
 

@@ -311,4 +311,39 @@ describe("agent sandboxing", () => {
 	it("re-checks redirect targets", () => {
 		assert.throws(() => netGuard.assertFetchableUrl(new URL("/secret", "http://127.0.0.1:1/").href), netGuard.BlockedUrlError);
 	});
+
+	it("headless pages may load only public URLs and their own job files", async () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "lh-demo-"));
+		const own = path.join(root, "demo.html");
+		assert.equal(await netGuard.pageRequestAllowed(new URL(`file://${own}`).href, root), true);
+		assert.equal(await netGuard.pageRequestAllowed("file:///etc/passwd", root), false);
+		assert.equal(await netGuard.pageRequestAllowed(`file://${root}-sibling/x`, root), false, "prefix-sharing dirs don't count");
+		assert.equal(await netGuard.pageRequestAllowed("data:text/plain,hi", root), true);
+		for (const url of ["http://127.0.0.1:3000/api/keys", "http://[::1]/", "http://localhost/", "http://169.254.169.254/", "ws://example.com/"]) {
+			assert.equal(await netGuard.pageRequestAllowed(url, root), false, url);
+		}
+		assert.equal(await netGuard.pageRequestAllowed("http://8.8.8.8/", root), true);
+	});
+
+	it("a real demo page can't reach the server's loopback or read server files", { skip: !process.env.CHROME_PATH && "set CHROME_PATH to run" }, async () => {
+		const http = await import("node:http");
+		let hits = 0;
+		const server = http.createServer((_q, s) => {
+			hits++;
+			s.end("secret");
+		});
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+		const port = (server.address() as { port: number }).port;
+		try {
+			const { realHeadless } = await import("../src/agent/subagents/headless.ts");
+			const result = await realHeadless.runDemo(
+				`<!doctype html><body><img src="http://127.0.0.1:${port}/a.png"><iframe src="file:///etc/hostname"></iframe><script>fetch("http://127.0.0.1:${port}/b").catch(()=>{})</script></body>`,
+				{ settleMs: 500 },
+			);
+			assert.equal(hits, 0, "nothing reached the loopback server");
+			assert.ok(result.failedRequests.some((r) => r.includes("/etc/hostname")), JSON.stringify(result.failedRequests));
+		} finally {
+			server.close();
+		}
+	});
 });

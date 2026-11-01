@@ -1,5 +1,8 @@
 import * as dns from "node:dns";
 import * as net from "node:net";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Page } from "puppeteer-core";
 import { Agent, fetch as undiciFetch } from "undici";
 import { CLOUD_MODE } from "../../../tenancy.ts";
 
@@ -134,4 +137,49 @@ export async function guardedFetch(raw: string, init: RequestInit = {}): Promise
 		// redirect-followed resp.url callers print as their source line.
 		return resp;
 	}
+}
+
+/** Resolve a hostname and report whether EVERY answer is public. */
+async function resolvesPublic(host: string): Promise<boolean> {
+	if (net.isIP(host)) return isPublicAddress(host);
+	try {
+		const answers = await dns.promises.lookup(host, { all: true });
+		return answers.length > 0 && answers.every((a) => isPublicAddress(a.address));
+	} catch {
+		return false;
+	}
+}
+
+/** May a headless page (cloud mode) load this URL? Public http(s), the
+ *  job's own files under fileRoot, and inline schemes only. */
+export async function pageRequestAllowed(raw: string, fileRoot: string): Promise<boolean> {
+	try {
+		const url = new URL(raw);
+		if (url.protocol === "data:" || url.protocol === "blob:" || url.href === "about:blank") return true;
+		if (url.protocol === "file:") return path.resolve(fileURLToPath(url)).startsWith(path.resolve(fileRoot) + path.sep);
+		if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+		const host = url.hostname.replace(/^\[|\]$/g, "");
+		if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) return false;
+		return await resolvesPublic(host);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The headless-page twin of guardedFetch (cloud mode): a demo or figure
+ * page runs agent-written code, so every request it makes is checked by
+ * pageRequestAllowed. A blocked request fails like any network error (the
+ * demo verifier sees it in failedRequests). Chrome resolves DNS again
+ * after this check, so this is narrower than guardedFetch's socket-level
+ * check; it closes the plain "load an internal address" path.
+ */
+export async function guardPageRequests(page: Page, fileRoot: string): Promise<void> {
+	await page.setRequestInterception(true);
+	page.on("request", (request) => {
+		if (request.isInterceptResolutionHandled()) return;
+		void pageRequestAllowed(request.url(), fileRoot).then((allowed) =>
+			(allowed ? request.continue() : request.abort("blockedbyclient")).catch(() => {}),
+		);
+	});
 }

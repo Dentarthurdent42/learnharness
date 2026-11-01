@@ -1,4 +1,6 @@
 import * as fs from "node:fs";
+import { CLOUD_MODE } from "../../../tenancy.ts";
+import { guardPageRequests } from "../tools/net-guard.ts";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -231,7 +233,12 @@ async function connectBrowserService(): Promise<import("puppeteer-core").Browser
  *  so concurrent jobs queue here instead of fighting over one webContents. */
 let helperPageChain: Promise<unknown> = Promise.resolve();
 
-async function withBrowserPage<T>(fn: (page: import("puppeteer-core").Page) => Promise<T>): Promise<T> {
+async function withBrowserPage<T>(
+	fn: (page: import("puppeteer-core").Page) => Promise<T>,
+	/** The job's own temp dir — the only local files its page may load
+	 *  (cloud mode's request guard, below). */
+	fileRoot: string,
+): Promise<T> {
 	// Helper first (owner ruling 2026-10-10: the app's own Chromium primary,
 	// system Chrome fallback) — deterministic across users, zero install.
 	const helper = await connectBrowserService();
@@ -264,6 +271,10 @@ async function withBrowserPage<T>(fn: (page: import("puppeteer-core").Page) => P
 	});
 	try {
 		const page = await browser.newPage();
+		// Cloud mode: the page runs agent-written code — it may load public
+		// web resources and its own job files, nothing on the server's
+		// network or disk (net-guard.ts; owner ruling 2026-11).
+		if (CLOUD_MODE) await guardPageRequests(page, fileRoot);
 		return await fn(page);
 	} finally {
 		await browser.close().catch(() => {});
@@ -311,7 +322,7 @@ async function runDemo(html: string, opts: RunDemoOptions = {}): Promise<DemoRun
 		} catch (err) {
 			pageErrors.push(err instanceof Error ? err.message : String(err));
 		}
-		});
+		}, dir);
 	} finally {
 		try {
 			fs.rmSync(dir, { recursive: true, force: true });
@@ -447,7 +458,7 @@ async function renderSvg(svg: string, opts: RenderSvgOptions = {}): Promise<Buff
 		// provider (see providerSafePng) — the visual-maker feeds this exact
 		// buffer back to the vision model as its only way to "look".
 		return providerSafePng(Buffer.from(shot));
-	}).finally(() => {
+	}, dir).finally(() => {
 		try {
 			fs.rmSync(dir, { recursive: true, force: true });
 		} catch {
