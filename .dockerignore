@@ -1,0 +1,16 @@
+# Build context for the cloud image (Dockerfile). Never ship local data,
+# keys or build output — the image builds its own .next from source.
+node_modules
+.next
+dist
+data
+.fresh-data
+auth.json
+.env*
+*.log
+.git
+.memory
+real-data-extraction
+tests
+electron
+build

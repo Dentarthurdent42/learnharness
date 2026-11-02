@@ -2,6 +2,8 @@
 
 `LH_MODE=cloud` turns one LearnHarness server into a shared, multi-user service: accounts, invite links, a per-user data directory, and the admin's API keys shared by everyone. Without it (the desktop app, `npm run dev`) nothing changes: one user, no login, own keys.
 
+To deploy it, see [deploy-fly.md](deploy-fly.md).
+
 ## Configuration
 
 | Variable | Purpose |
