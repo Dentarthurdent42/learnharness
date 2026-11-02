@@ -12,6 +12,7 @@ import { layout as dagreLayout } from "dagre-d3-es/src/dagre/index.js";
 // Mermaid's default flowchart edge curve: dagre's waypoints drawn through
 // d3's curveBasis (the exact recipe dagre-d3's own renderer uses).
 import { curveBasis, line } from "d3-shape";
+import { usePinchZoom } from "@/components/use-pinch";
 import { fitGraphView, fitZoomFor, zoomedGraphView, type Viewport } from "@/components/pan-zoom";
 import type { PlanBlockData, PlanNodeStatus, PlanTree } from "@/src/core";
 import { derivedNodeStatus, derivePlanStatuses } from "@/src/core";
@@ -834,6 +835,11 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
 	}, [fitZoom, box, size]);
+	// Touch (iPhone wave): a two-finger pinch zooms like a wheel tick.
+	const pinching = usePinchZoom(viewportRef, (factor, center) => {
+		setView((v) => zoomedGraphView(v, factor, fitZoom, center, box, size));
+		userAdjustedRef.current = true;
+	});
 
 	// Smooth zoom: the transform eases between states (CSS retargets from the
 	// current computed value, so chained wheel ticks stay fluid). Panning is
@@ -844,6 +850,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		if (e.button !== 0) return;
 		if ((e.target as HTMLElement).closest("button")) return;
 		if (atFloor) return;
+		if (dragRef.current) return; // a second finger — the pinch owns it
 		dragRef.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y, moved: false };
 		setPanning(true);
 		e.currentTarget.classList.add("cursor-grabbing");
@@ -852,6 +859,11 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 	const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
 		const d = dragRef.current;
 		if (!d) return;
+		if (pinching.current) {
+			// A pinch took over: drop the one-finger pan (its origin is stale).
+			dragRef.current = null;
+			return;
+		}
 		d.moved = true;
 		setView((v) =>
 			v.zoom <= fitZoom + 1e-9 ? v : { ...v, x: d.x + (e.clientX - d.px), y: d.y + (e.clientY - d.py) },
@@ -947,7 +959,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 							/>
 						</div>
 						<div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-2">
-							<span className="text-xs text-muted-foreground/60">Drag to pan · scroll to zoom</span>
+							<span className="text-xs text-muted-foreground/60"><span className="max-md:hidden">Drag to pan · scroll to zoom</span><span className="md:hidden">Drag to pan · pinch to zoom</span></span>
 							<div className="flex gap-1">
 								<Hint label="Zoom out" side="bottom">
 <button
