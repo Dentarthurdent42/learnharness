@@ -80,3 +80,18 @@ describe("computeMenuPlacement — cap + position", () => {
 		assert.ok(!("right" in p.style));
 	});
 });
+describe("horizontal clamp (iPhone wave)", () => {
+	it("pins a right-aligned menu to the left edge when it would spill off screen", () => {
+		const p = computeMenuPlacement({ top: 100, bottom: 100, left: 30, right: 30 }, { width: 390, height: 800 }, 100, "down", "right", 120);
+		assert.equal(p.style.left, 8);
+		assert.equal(p.style.right, undefined);
+	});
+	it("pins a left-aligned menu to the right edge when it would spill off screen", () => {
+		const p = computeMenuPlacement({ top: 100, bottom: 100, left: 350, right: 350 }, { width: 390, height: 800 }, 100, "down", "left", 120);
+		assert.equal(p.style.right, 8);
+	});
+	it("keeps the aligned position when it fits", () => {
+		const p = computeMenuPlacement({ top: 100, bottom: 100, left: 300, right: 300 }, { width: 390, height: 800 }, 100, "down", "right", 120);
+		assert.equal(p.style.right, 90);
+	});
+});

@@ -76,6 +76,8 @@ export function computeMenuPlacement(
 	contentHeight: number,
 	preferredSide: MenuSide,
 	align: MenuAlign,
+	/** The menu's measured width (0 = unknown — no horizontal clamp). */
+	contentWidth = 0,
 ): MenuPlacement {
 	const availDown = viewport.height - EDGE - (rect.bottom + GAP);
 	const availUp = rect.top - GAP - EDGE;
@@ -91,8 +93,15 @@ export function computeMenuPlacement(
 	}
 	const avail = side === "down" ? availDown : availUp;
 	const maxHeight = Math.max(MIN_USABLE, Math.min(CAP_VH * viewport.height, avail));
-	const horizontal: Record<string, number> =
+	// Horizontal clamp (iPhone wave): an anchor near a screen edge (a node
+	// long-pressed at the left of a phone) would push the aligned menu off
+	// screen — pin it to the EDGE floor instead.
+	let horizontal: Record<string, number> =
 		align === "right" ? { right: viewport.width - rect.right } : { left: rect.left };
+	if (contentWidth > 0) {
+		if (align === "right" && rect.right - contentWidth < EDGE) horizontal = { left: EDGE };
+		else if (align === "left" && rect.left + contentWidth > viewport.width - EDGE) horizontal = { right: EDGE };
+	}
 	const vertical: Record<string, number> =
 		side === "down" ? { top: rect.bottom + GAP } : { bottom: viewport.height - rect.top + GAP };
 	return { side, style: { ...horizontal, ...vertical }, maxHeight };
@@ -204,6 +213,7 @@ export function MenuShell({
 				menuRef.current.scrollHeight,
 				preferredSide,
 				align,
+				menuRef.current.offsetWidth,
 			);
 			setPlaced(p);
 		};

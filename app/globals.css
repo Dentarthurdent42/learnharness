@@ -598,3 +598,14 @@ body {
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
 }
+
+/* iPhone wave (2026-11): iOS Safari zooms the page into any focused field
+   under 16px and never zooms back out. Phones get 16px fields; wider
+   screens keep the designed sizes. */
+@media (max-width: 767px) {
+	input,
+	textarea,
+	select {
+		font-size: max(16px, 1em);
+	}
+}

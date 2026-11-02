@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Source_Sans_3 } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -13,6 +13,20 @@ const prose = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans3" });
 export const metadata: Metadata = {
 	title: "Learning Harness",
 	description: "A teacher agent with a memory — sessions, quizzes, and a knowledge graph of what you know.",
+	// iPhone wave (2026-11): Add to Home Screen opens full screen with the
+	// app's icon; the status bar floats over the dark page.
+	appleWebApp: { capable: true, title: "LearnHarness", statusBarStyle: "black-translucent" },
+	icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+/** viewport-fit=cover lets the page reach under the notch and home bar;
+ *  the chrome pads itself with env(safe-area-inset-*) where it touches an
+ *  edge. */
+export const viewport: Viewport = {
+	width: "device-width",
+	initialScale: 1,
+	viewportFit: "cover",
+	themeColor: "#141414",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

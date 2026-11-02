@@ -8,6 +8,7 @@ import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import type { ChatDeleteMode } from "@/src/core";
 import { DumbbellIcon, LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from "lucide-react";
 import { signOut, useAccount } from "@/components/account";
+import { useLongPress } from "@/components/long-press";
 import { AllowanceMeter } from "@/components/allowance";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
@@ -71,10 +72,30 @@ declare global {
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; toggle: () => void }>({
+const SidebarContext = createContext<{ open: boolean; toggle: () => void; phone: boolean; close: () => void }>({
 	open: false,
 	toggle: () => {},
+	phone: false,
+	close: () => {},
 });
+
+/** Phone layout (cloud/iPhone wave, 2026-11, owner design): below this
+ *  width the sidebar is a slide-over drawer — closed by default, over the
+ *  page with a backdrop, closing on backdrop tap and navigation. Matches
+ *  Tailwind's md breakpoint (the max-md: variants elsewhere). */
+const PHONE_QUERY = "(max-width: 767px)";
+
+export function usePhoneLayout(): boolean {
+	const [phone, setPhone] = useState(false);
+	useEffect(() => {
+		const mq = window.matchMedia(PHONE_QUERY);
+		const update = () => setPhone(mq.matches);
+		update();
+		mq.addEventListener("change", update);
+		return () => mq.removeEventListener("change", update);
+	}, []);
+	return phone;
+}
 
 export function useSidebar() {
 	return useContext(SidebarContext);
@@ -86,6 +107,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	const [open, setOpen] = useState(false);
 	const [narrow, setNarrow] = useState(false);
 	const [mounted, setMounted] = useState(false);
+	// Phone: the drawer's own open state — never persisted, starts closed
+	// (the desktop preference keeps its meaning on wide screens).
+	const phone = usePhoneLayout();
+	const [drawerOpen, setDrawerOpen] = useState(false);
 
 	useEffect(() => {
 		// Electron shell detection (merged chrome, 2026-09-17): keys the
@@ -128,6 +153,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 
 	const toggle = useCallback(() => {
+		if (phone) {
+			setDrawerOpen((v) => !v);
+			return;
+		}
 		// Opening while narrow (auto-closed, or the user's own closed-at-
 		// narrow): ask the shell to widen to the threshold — the resize
 		// listener flips `narrow` and the sidebar appears. The preference
@@ -143,7 +172,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(STORAGE_KEY, v ? "0" : "1");
 			return !v;
 		});
-	}, [narrow, open]);
+	}, [narrow, open, phone]);
+	const close = useCallback(() => setDrawerOpen(false), []);
 
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
@@ -159,9 +189,19 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: open && !narrow, toggle }}>
+		<SidebarContext.Provider value={{ open: phone ? drawerOpen : open && !narrow, toggle, phone, close }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
-			<div className={cn("flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
+			{/* Safe areas (iPhone wave): viewport-fit=cover puts the page under
+			    the notch and home bar — the frame pads itself clear. env() is
+			    0 on desktop, so nothing moves there. */}
+			<div
+				className={cn(
+					"flex h-dvh pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
+					mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]",
+				)}
+			>
+				{children}
+			</div>
 		</SidebarContext.Provider>
 	);
 }
@@ -271,6 +311,7 @@ export function SessionRow({
 	onOpen,
 	kbdSelected = false,
 	onContextMenu,
+	onLongPress,
 }: {
 	chat: ChatListItem;
 	active: boolean;
@@ -280,12 +321,17 @@ export function SessionRow({
 	kbdSelected?: boolean;
 	/** Right-click opens the context menu (wave 6: Rename / Delete). */
 	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+	/** Touch long-press opens the same menu (iPhone wave — no right-click). */
+	onLongPress?: (anchor: HTMLButtonElement) => void;
 }) {
+	const longPress = useLongPress<HTMLButtonElement>((anchor) => onLongPress?.(anchor));
 	return (
 		<button
 			type="button"
 			onClick={onOpen}
 			onContextMenu={onContextMenu}
+			{...(onLongPress ? longPress : {})}
+			style={{ WebkitTouchCallout: "none" }}
 			data-testid={kbdSelected ? "session-row-kbd" : "session-row"}
 			className={cn(
 				"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
@@ -370,7 +416,7 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const { open, toggle } = useSidebar();
+	const { open, toggle, phone, close } = useSidebar();
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
@@ -533,7 +579,10 @@ function SessionsSidebar() {
 
 	const openContext = (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
 		e.preventDefault(); // suppress the native menu
-		ctxAnchorRef.current = e.currentTarget;
+		openContextAt(e.currentTarget, chat);
+	};
+	const openContextAt = (anchor: HTMLButtonElement, chat: ChatListItem) => {
+		ctxAnchorRef.current = anchor;
 		setCtxChatId(chat.id);
 	};
 
@@ -618,6 +667,13 @@ function SessionsSidebar() {
 		listRef.current?.querySelectorAll("button")[kbdIndex]?.scrollIntoView({ block: "nearest" });
 	}, [kbdIndex]);
 
+	// Phone: navigating (a session picked, a new one started, home) closes
+	// the drawer — the page the tap asked for is what the learner wants
+	// to see. Keyed on the path itself, so opening never self-closes.
+	useEffect(() => {
+		if (phone) close();
+	}, [pathname]); // path changes only — phone/close are read, not tracked
+
 	useEffect(() => {
 		if (!open) return;
 		void refresh();
@@ -626,11 +682,22 @@ function SessionsSidebar() {
 	}, [open, pathname, refresh]);
 
 	return (
+		<>
+		{/* Phone: the drawer's backdrop — a tap anywhere outside closes it. */}
+		{phone && open && (
+			<div className="fixed inset-0 z-40 bg-black/60" aria-hidden onClick={close} data-testid="sidebar-backdrop" />
+		)}
 		<aside
-			className={cn("sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
+			className={cn(
+				phone
+					? "fixed inset-y-0 left-0 z-50 w-[min(18rem,85vw)] transition-transform duration-200 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] bg-background"
+					: "sidebar-motion shrink-0 overflow-hidden duration-200",
+				phone ? (open ? "translate-x-0" : "-translate-x-full") : open ? "w-72" : "w-0",
+			)}
 			aria-hidden={!open}
+			data-testid="sessions-sidebar"
 		>
-			<div className="flex h-full w-72 flex-col border-r bg-background">
+			<div className={cn("flex h-full flex-col border-r bg-background", phone ? "w-full" : "w-72")}>
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights
@@ -813,6 +880,7 @@ function SessionsSidebar() {
 										router.push(`/chat/${c.id}`);
 									}}
 									onContextMenu={(e) => openContext(e, c)}
+									onLongPress={(anchor) => openContextAt(anchor, c)}
 								/>
 							),
 						)
@@ -833,7 +901,10 @@ function SessionsSidebar() {
 						<Hint label="Settings" action="open-settings" side="right">
 							<button
 								type="button"
-								onClick={() => openSettings()}
+								onClick={() => {
+									if (phone) close();
+									openSettings();
+								}}
 								data-testid="settings-entry"
 								className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 							>
@@ -920,6 +991,7 @@ function SessionsSidebar() {
 					onDeleted={onDeleted}
 				/>
 			</aside>
+		</>
 	);
 }
 

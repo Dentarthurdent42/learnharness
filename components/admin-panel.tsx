@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "@/components/account";
 import { AdminAllowance } from "@/components/admin-allowance";
+import { SidebarToggle } from "@/components/sidebar";
 import { Input } from "@/components/ui/input";
 
 interface UserRow {
@@ -203,7 +204,11 @@ export function AdminPanel() {
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
 				<header className="flex flex-wrap items-center justify-between gap-3">
-					<h1 className="font-ui text-sm uppercase tracking-wider text-foreground">Accounts</h1>
+					<div className="flex items-center gap-3">
+						{/* The way back to the sessions (the phone drawer, or a closed sidebar). */}
+						<SidebarToggle />
+						<h1 className="font-ui text-sm uppercase tracking-wider text-foreground">Accounts</h1>
+					</div>
 					<Button size="sm" onClick={() => issue("invite")} disabled={busy !== null} data-testid="create-invite">
 						{busy === "invite" ? "Creating…" : "Create invite link"}
 					</Button>

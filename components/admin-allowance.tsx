@@ -18,7 +18,7 @@ interface Settings {
 	economy?: { model: { provider: string; id: string }; thinkingLevel?: string };
 }
 
-const field = "flex flex-col gap-1.5";
+const field = "flex min-w-0 flex-col gap-1.5";
 const label = "font-ui text-xs uppercase tracking-wider text-muted-foreground";
 
 export function AdminAllowance() {
@@ -76,7 +76,7 @@ export function AdminAllowance() {
 					Each person&apos;s teaching turns count toward their limit, and older spending counts less over time. Turns pause at 100% until it fades.
 				</p>
 			</div>
-			<div className="grid gap-4 sm:grid-cols-2">
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<label className={field}>
 					<span className={label}>Default limit (USD)</span>
 					<Input type="number" inputMode="decimal" min={0} step="0.5" value={limit} onChange={(e) => setLimit(e.target.value)} data-testid="allowance-limit" />
@@ -93,7 +93,7 @@ export function AdminAllowance() {
 							setModelKey(e.target.value);
 							setLevel("");
 						}}
-						className="h-9 rounded-md border border-input bg-transparent px-2 text-sm dark:bg-input/30"
+						className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2 text-sm dark:bg-input/30"
 						data-testid="economy-model"
 					>
 						<option value="">None (no economy switch)</option>
@@ -110,7 +110,7 @@ export function AdminAllowance() {
 						value={level}
 						onChange={(e) => setLevel(e.target.value)}
 						disabled={!picked || picked.supportedLevels.length === 0}
-						className="h-9 rounded-md border border-input bg-transparent px-2 text-sm disabled:opacity-50 dark:bg-input/30"
+						className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2 text-sm disabled:opacity-50 dark:bg-input/30"
 					>
 						<option value="">Model default</option>
 						{picked?.supportedLevels.map((l) => (
