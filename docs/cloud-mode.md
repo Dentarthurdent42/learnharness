@@ -39,3 +39,15 @@ Passwords are stored as scrypt hashes. Session and link tokens are stored only a
 - **Logins** last 30 days and are renewed when used. After 10 failed attempts in 15 minutes, that username is blocked for 15 minutes.
 - **Usernames** are 3–32 characters (letters, numbers, `. _ -`) and case-insensitive. Passwords need at least 10 characters.
 - **Keys.** Only the admin can change API keys. Other users see which providers have a key, never the values, and pick their own models from those providers.
+
+## Allowance
+
+Each person's **teaching turns** count toward a spending limit. Background agents and graph building don't count.
+
+- **Spending fades.** A dollar spent counts half as much after the half-life. The faded total, divided by the person's limit, is the allowance in use. The defaults are a **$2 limit** and a **24-hour half-life**, both changeable on the Accounts page. Each account can also have its own limit.
+- **What users see.** The sidebar shows "Allowance N%" at all times. From **50%**, a gentle notice appears above the message box. From **85%** the notice is stronger, with a one-tap **Switch to economy**.
+- **At 100%,** new turns the user starts are refused (`429 allowance_exhausted`) with an estimate of when they can continue: h·log2(spent/limit). Turns that deliver background work already running still go through.
+- **Economy preset.** The admin sets it: one priced model and a thinking level. Switching moves the open session and the default for new sessions. **Switch back** restores both.
+- **The admin is under the same rules.** Raise your own limit on the Accounts page if you need to.
+- **Regular users can only pick priced models.** An unpriced model would count as $0. The admin sees every model.
+- **Ledger.** Spend is recorded per user in `users/<id>/spend.jsonl`, separately from sessions, so deleting a session doesn't erase its cost. Like the rest of the app, the ledger stores token usage; dollars are worked out from current prices when it's read.

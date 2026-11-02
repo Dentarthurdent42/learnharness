@@ -4,6 +4,8 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import { ACCOUNTS_DIR } from "../../config.ts";
 import type { Role } from "../../tenancy.ts";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { DEFAULT_ALLOWANCE, type AllowanceConfig } from "../core/allowance.ts";
 
 /**
  * THE ACCOUNT STORE (cloud mode, 2026-11): users, login sessions, and the
@@ -43,6 +45,8 @@ export interface UserRecord {
 	role: Role;
 	disabled: boolean;
 	createdAt: number;
+	/** Allowance override, USD; absent = the server default. */
+	limitUsd?: number;
 }
 
 export interface SessionRecord {
@@ -74,6 +78,7 @@ export interface UserSummary {
 	role: Role;
 	disabled: boolean;
 	createdAt: number;
+	limitUsd?: number;
 }
 
 export class AccountError extends Error {
@@ -84,7 +89,8 @@ export class AccountError extends Error {
 			| "weak_password"
 			| "password_too_long"
 			| "invalid_link"
-			| "not_found",
+			| "not_found"
+			| "invalid_limit",
 		message: string,
 	) {
 		super(message);
@@ -181,7 +187,14 @@ export function validatePassword(password: string): void {
 }
 
 export function summarize(user: UserRecord): UserSummary {
-	return { id: user.id, username: user.username, role: user.role, disabled: user.disabled, createdAt: user.createdAt };
+	return {
+		id: user.id,
+		username: user.username,
+		role: user.role,
+		disabled: user.disabled,
+		createdAt: user.createdAt,
+		...(user.limitUsd !== undefined ? { limitUsd: user.limitUsd } : {}),
+	};
 }
 
 // ─── users ───────────────────────────────────────────────────────────────────
@@ -221,12 +234,13 @@ export async function createUser(input: { username: string; password: string; ro
 	return user;
 }
 
-function updateUser(id: string, patch: Partial<Pick<UserRecord, "passwordHash" | "disabled">>): UserRecord {
+function updateUser(id: string, patch: Partial<Pick<UserRecord, "passwordHash" | "disabled" | "limitUsd">>): UserRecord {
 	const users = listUsers();
 	const i = users.findIndex((u) => u.id === id);
 	const current = users[i];
 	if (!current) throw new AccountError("not_found", "No such user.");
 	const next = { ...current, ...patch };
+	if (next.limitUsd === undefined) delete next.limitUsd;
 	users[i] = next;
 	writeList(usersFile(), users);
 	return next;
@@ -361,4 +375,44 @@ export async function redeemReset(token: string, password: string, now = Date.no
 	const user = updateUser(link.userId!, { passwordHash });
 	deleteSessionsForUser(user.id);
 	return user;
+}
+
+// ─── allowance settings (admin page) ─────────────────────────────────────────
+
+/** Set or clear (undefined) one account's allowance override. */
+export function setUserLimit(id: string, limitUsd: number | undefined): UserRecord {
+	if (limitUsd !== undefined && !(Number.isFinite(limitUsd) && limitUsd >= 0)) {
+		throw new AccountError("invalid_limit", "The limit must be a dollar amount of 0 or more.");
+	}
+	return updateUser(id, { limitUsd });
+}
+
+/** The server-wide allowance settings: the default limit, the fade speed,
+ *  and the admin's economy preset (one model + thinking level). */
+export interface AllowanceSettings extends AllowanceConfig {
+	economy?: { model: { provider: string; id: string }; thinkingLevel?: ThinkingLevel };
+}
+
+const allowanceFile = () => path.join(ACCOUNTS_DIR, "allowance.json");
+
+export function readAllowanceSettings(): AllowanceSettings {
+	try {
+		const raw = JSON.parse(fs.readFileSync(allowanceFile(), "utf-8")) as Partial<AllowanceSettings>;
+		return {
+			limitUsd: typeof raw.limitUsd === "number" && raw.limitUsd >= 0 ? raw.limitUsd : DEFAULT_ALLOWANCE.limitUsd,
+			halfLifeHours:
+				typeof raw.halfLifeHours === "number" && raw.halfLifeHours > 0 ? raw.halfLifeHours : DEFAULT_ALLOWANCE.halfLifeHours,
+			...(raw.economy?.model ? { economy: raw.economy } : {}),
+		};
+	} catch {
+		return { ...DEFAULT_ALLOWANCE };
+	}
+}
+
+export function writeAllowanceSettings(next: AllowanceSettings): AllowanceSettings {
+	fs.mkdirSync(ACCOUNTS_DIR, { recursive: true, mode: 0o700 });
+	const tmp = `${allowanceFile()}.tmp-${crypto.randomUUID().slice(0, 8)}`;
+	fs.writeFileSync(tmp, JSON.stringify(next, null, "\t"), { encoding: "utf-8", mode: 0o600 });
+	fs.renameSync(tmp, allowanceFile());
+	return next;
 }

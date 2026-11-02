@@ -17,6 +17,7 @@
  * set; nothing here changes.
  */
 
+import { modelAllowedForUser } from "./allowance.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { piModels } from "../agent/models.ts";
@@ -185,6 +186,8 @@ export function modelCatalog(): ModelCatalogResponse {
 		.filter((p) => keyed.has(p.id))
 		.flatMap((p) => piModels().getModels(p.id))
 		.map(toModelDto)
+		// Cloud mode: regular users see priced models only (allowance.ts).
+		.filter((m) => modelAllowedForUser(m.provider, m.id))
 		.sort((a, b) => (a.provider === b.provider ? a.id.localeCompare(b.id) : a.provider.localeCompare(b.provider)));
 	return {
 		models,
@@ -216,6 +219,9 @@ export function validateChatSettings(settings: ChatSettings): SettingsValidation
 		if (!piModels().getModel(provider, id)) {
 			return { ok: false, error: `No model "${id}" in the ${provider} catalog` };
 		}
+		if (!modelAllowedForUser(provider, id)) {
+			return { ok: false, error: `The model "${id}" isn't available on this server` };
+		}
 	}
 	// BYOK interlude (owner, 2026-09-22): thinking levels NEVER reject a
 	// write — a model swap with a pinned level JUST WORKS. The WRITE clamps
@@ -245,6 +251,9 @@ function validateSlotSpec(name: ModelSlotName, slot: { model?: { provider: strin
 		}
 		if (!piModels().getModel(provider, id)) {
 			return { ok: false, error: `No model "${id}" in the ${provider} catalog` };
+		}
+		if (!modelAllowedForUser(provider, id)) {
+			return { ok: false, error: `The model "${id}" isn't available on this server` };
 		}
 	}
 	// BYOK interlude (owner, 2026-09-22): the supported-level verdict is

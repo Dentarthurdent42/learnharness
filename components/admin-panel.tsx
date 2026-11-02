@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "@/components/account";
+import { AdminAllowance } from "@/components/admin-allowance";
+import { Input } from "@/components/ui/input";
 
 interface UserRow {
 	id: string;
@@ -17,6 +19,10 @@ interface UserRow {
 	role: "admin" | "user";
 	disabled: boolean;
 	createdAt: number;
+	/** The account's own limit override; absent = the default. */
+	limitUsd?: number;
+	/** Current use: faded spend / effective limit (null = a $0 limit). */
+	allowance: { fraction: number | null; limitUsd: number };
 }
 
 interface IssuedLink {
@@ -68,6 +74,74 @@ function LinkCard({ link, onDismiss }: { link: IssuedLink; onDismiss: () => void
 				</Button>
 				<span className="text-xs text-muted-foreground">Send it yourself — it won&apos;t be shown again.</span>
 			</div>
+		</div>
+	);
+}
+
+function formatUsd(n: number): string {
+	return `$${n.toFixed(n < 10 ? 2 : 0)}`;
+}
+
+/** One account's allowance: use, and the limit override editor. */
+function LimitEditor({ user, onSaved }: { user: UserRow; onSaved: () => void }) {
+	const [open, setOpen] = useState(false);
+	const [value, setValue] = useState(user.limitUsd !== undefined ? String(user.limitUsd) : "");
+	const [error, setError] = useState<string | null>(null);
+	const pct = user.allowance.fraction === null ? "100%" : `${Math.round(user.allowance.fraction * 100)}%`;
+
+	async function save(limitUsd: number | null) {
+		setError(null);
+		const res = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ limitUsd }),
+		});
+		const data = (await res.json().catch(() => ({}))) as { error?: string };
+		if (!res.ok) {
+			setError(data.error ?? `Couldn't save (${res.status}).`);
+			return;
+		}
+		setOpen(false);
+		onSaved();
+	}
+
+	return (
+		<div className="flex flex-wrap items-center gap-2 font-ui text-xs text-muted-foreground" data-testid="limit-editor">
+			<span>
+				{pct} of {formatUsd(user.allowance.limitUsd)}
+				{user.limitUsd === undefined ? " (default)" : ""}
+			</span>
+			{!open ? (
+				<button type="button" className="underline-offset-2 hover:text-foreground hover:underline" onClick={() => setOpen(true)}>
+					Change limit
+				</button>
+			) : (
+				<>
+					<Input
+						type="number"
+						inputMode="decimal"
+						min={0}
+						step="0.5"
+						placeholder="USD"
+						value={value}
+						onChange={(e) => setValue(e.target.value)}
+						className="h-7 w-24 text-xs"
+						aria-label={`Limit for ${user.username}`}
+					/>
+					<Button size="xs" onClick={() => void save(value === "" ? null : Number(value))}>
+						Save
+					</Button>
+					{user.limitUsd !== undefined && (
+						<Button size="xs" variant="ghost" onClick={() => void save(null)}>
+							Use default
+						</Button>
+					)}
+					<Button size="xs" variant="ghost" onClick={() => setOpen(false)}>
+						Cancel
+					</Button>
+				</>
+			)}
+			{error && <span className="text-red-500">{error}</span>}
 		</div>
 	);
 }
@@ -143,6 +217,8 @@ export function AdminPanel() {
 					</p>
 				)}
 
+				<AdminAllowance />
+
 				{users === null ? (
 					<p className="text-sm text-muted-foreground">Loading…</p>
 				) : (
@@ -158,6 +234,7 @@ export function AdminPanel() {
 										{u.role === "admin" ? "Admin" : "User"} · joined {formatDate(u.createdAt)}
 										{u.disabled && " · disabled"}
 									</p>
+									<LimitEditor user={u} onSaved={() => void load()} />
 								</div>
 								<div className="flex items-center gap-2">
 									<Button size="sm" variant="outline" onClick={() => issue("reset", u)} disabled={busy !== null}>
