@@ -35,6 +35,7 @@ import {
 } from "../core/settings-resolution.ts";
 import { modelsNotConfigured, providerKeyMissing as providerKeyMissingEnvelope, type ProviderKeyMissing } from "../core/settings.ts";
 import { beginTurn, endTurn } from "./turn-liveness.ts";
+import { allowanceRefusal } from "./allowance.ts";
 import { applyParkedDismissal } from "./dismissal-park.ts";
 import { registerTurn, unregisterTurn } from "./turn-runs.ts";
 import { persistTurn, triggerExtraction } from "./turn-service.ts";
@@ -158,6 +159,11 @@ export async function handleChatRequest(
 		}
 		throw err;
 	}
+	// Cloud mode's allowance gate (server/allowance.ts): user-started turns
+	// only — the wake pipeline enters handleChatInput directly and always
+	// runs (it delivers work already in flight).
+	const refusal = allowanceRefusal(chatId);
+	if (refusal) return refusal;
 	return handleChatInput(chatId, input, buildAgent);
 }
 

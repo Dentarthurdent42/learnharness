@@ -8,6 +8,7 @@ import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import type { ChatDeleteMode } from "@/src/core";
 import { DumbbellIcon, LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from "lucide-react";
 import { signOut, useAccount } from "@/components/account";
+import { AllowanceMeter } from "@/components/allowance";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -936,8 +937,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	);
 }
 
-/** Cloud mode's account rows under Settings (2026-11): Accounts for the
- *  admin, Sign out for everyone. Desktop renders nothing. */
+/** Cloud mode's account rows under Settings (2026-11): the allowance
+ *  meter, Accounts for the admin, Sign out for everyone. Desktop renders
+ *  nothing. */
 function AccountRows() {
 	const account = useAccount();
 	if (!account?.cloud || !account.user) return null;
@@ -945,6 +947,7 @@ function AccountRows() {
 		"flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
 	return (
 		<>
+			<AllowanceMeter />
 			{account.user.role === "admin" && (
 				<Link href="/admin" className={row} data-testid="admin-entry">
 					<UsersIcon className="size-3" />
