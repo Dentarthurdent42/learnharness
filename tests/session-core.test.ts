@@ -1113,3 +1113,102 @@ describe("absorbed — the custom role (the doubled thinking card)", () => {
 		assert.equal((customs[0] as { id?: string }).id, "srv_1");
 	});
 });
+
+// ─── auto-reconnect (iPhone, 2026-11) ────────────────────────────────────────
+
+describe("auto-reconnect after a dropped stream", () => {
+	/** A stream that delivers one event, then dies like Safari's "Load failed". */
+	function droppingStream(): Response {
+		const bytes = new TextEncoder().encode(sse({ type: "message_start", message: { role: "assistant", content: [{ type: "text", text: "hi" }] } }));
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(bytes);
+				controller.error(new TypeError("Load failed"));
+			},
+		});
+		return new Response(body, { status: 200 });
+	}
+
+	it("reattaches on its own after a drop, with no error shown", async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		let streams = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === "/api/chats/chat_x") return Response.json({ messages: [] });
+			if (url === "/api/chats/chat_x/stream") {
+				streams++;
+				return streams === 1 ? droppingStream() : sseResponse({ type: "agent_end", messages: [] }, "[DONE]");
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		}) as typeof globalThis.fetch;
+		const m = model();
+		await m.resumeStream(false);
+		assert.equal(m.getState().error, null, "no banner for a dropped connection");
+		assert.equal(m.getState().status, "submitted", "still busy while it reconnects");
+		t.mock.timers.tick(1000);
+		await new Promise((r) => setImmediate(r));
+		await new Promise((r) => setImmediate(r));
+		assert.equal(streams, 2, "reattached once");
+		assert.equal(m.getState().status, "ready");
+		assert.equal(m.getState().error, null);
+	});
+
+	it("gives up after the backoff and shows the error; reconnectIfDropped tries again", async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		let streams = 0;
+		let healthy = false;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === "/api/chats/chat_x") {
+				if (healthy) return Response.json({ messages: [] });
+				throw new TypeError("Load failed");
+			}
+			if (url === "/api/chats/chat_x/stream") {
+				streams++;
+				if (healthy) return sseResponse({ type: "agent_end", messages: [] }, "[DONE]");
+				throw new TypeError("Load failed");
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		}) as typeof globalThis.fetch;
+		const m = model();
+		await m.resumeStream(false);
+		for (const delay of [1000, 2000, 4000, 8000, 15000]) {
+			assert.equal(m.getState().error, null);
+			t.mock.timers.tick(delay);
+			for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+		}
+		assert.equal(m.getState().status, "error", "five tries, then the error shows");
+		assert.equal(m.getState().error?.message, "Load failed");
+		healthy = true;
+		m.reconnectIfDropped();
+		for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+		assert.equal(m.getState().error, null);
+		assert.equal(m.getState().status, "ready", "back in the app: reconnected");
+	});
+
+	it("does not retry server refusals, and stop() cancels a pending reconnect", async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		let streams = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === "/api/chats/chat_x/stream") {
+				streams++;
+				return streams === 1 ? droppingStream() : new Response("nope", { status: 500 });
+			}
+			if (url === "/api/chats/chat_x") return Response.json({ messages: [] });
+			throw new Error(`unexpected fetch: ${url}`);
+		}) as typeof globalThis.fetch;
+		const m = model();
+		await m.resumeStream(false);
+		m.stop();
+		t.mock.timers.tick(20000);
+		for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+		assert.equal(streams, 1, "stop() cancelled the pending reconnect");
+
+		const m2 = model();
+		streams = 1; // the next stream answers 500
+		await m2.resumeStream(false);
+		assert.equal(m2.getState().status, "error", "a server error is not a dropped connection");
+		assert.equal(m2.getState().error?.message, "nope");
+	});
+});
