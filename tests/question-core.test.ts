@@ -10,6 +10,7 @@ import {
 	askInputSchema,
 	quizInputBase,
 	askOptionProblems,
+	askInputProblems,
 	buildAnswer,
 	compactAnswerForModel,
 	dismissedAnswer,
@@ -817,5 +818,20 @@ describe("the quiz role field (predict | check)", () => {
 	it("the display parse KEEPS the role: quizDisplayInputSchema retains type where the base strips it", () => {
 		const cleaned = Value.Clean(quizDisplayInputSchema, { ...valid }) as Record<string, unknown>;
 		assert.equal(cleaned.type, "check", "role survives the display parse (the dock gates collapse + labels on it)");
+	});
+});
+
+describe("askInputProblems (multi-select needs options)", () => {
+	it("rejects multiSelect without options", () => {
+		assert.match(askInputProblems({ multiSelect: true }).join(" "), /no options/);
+		assert.match(askInputProblems({ multiSelect: true, options: [] }).join(" "), /no options/);
+	});
+	it("accepts multiSelect with options, and free text without either", () => {
+		assert.deepEqual(askInputProblems({ multiSelect: true, options: [{ label: "a" }, { label: "b" }] }), []);
+		assert.deepEqual(askInputProblems({}), []);
+		assert.deepEqual(askInputProblems({ multiSelect: false }), []);
+	});
+	it("keeps the option sanity checks", () => {
+		assert.match(askInputProblems({ options: [{ label: "a" }, { label: "a" }] }).join(" "), /distinct/);
 	});
 });
