@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import { guardedFetch } from "./net-guard.ts";
 import * as path from "node:path";
 import { Type } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
@@ -111,7 +112,8 @@ export function createPdfReadTools(dir: string): Record<string, AgentTool<any>> 
 					return `web_fetch_pdf failed: invalid URL "${url}"`;
 				}
 				try {
-					const resp = await fetch(url, {
+					// guardedFetch: cloud mode refuses non-public destinations (net-guard.ts).
+					const resp = await guardedFetch(url, {
 						headers: {
 							"User-Agent": USER_AGENT,
 							Accept: "application/pdf,application/octet-stream,*/*",

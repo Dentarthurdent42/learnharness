@@ -45,6 +45,7 @@ import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { canManageKeys, useAccount } from "@/components/account";
 import { KeysSection } from "./keys-section.tsx";
 import { Hint } from "@/components/ui/hint";
 import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
@@ -179,6 +180,11 @@ export function SettingsDialogBody({
 			window.removeEventListener(MENU_CLOSE_EVENT, onClose);
 		};
 	}, []);
+	// Cloud mode (2026-11): the shared key store is the admin's — everyone
+	// else never sees the Keys section (components/account.tsx).
+	const account = useAccount();
+	const keysAllowed = canManageKeys(account);
+	const sections = SECTIONS.filter((s) => s.id !== "keys" || keysAllowed);
 	const [active, setActive] = useState<SectionId>(initialSection);
 	// A deep-link fired while the dialog is ALREADY open (first exercised by
 	// the wave-6 embedding picker's "Add a provider key first…" link — the
@@ -267,7 +273,9 @@ export function SettingsDialogBody({
 			aria-modal="true"
 			aria-label="Settings"
 			data-testid="settings-dialog"
-			className="settings-dialog-pop flex h-[620px] max-h-[85vh] w-[920px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+			// Phone (iPhone wave, owner design): full screen, safe-area padded;
+			// the section nav becomes a scrolling tab row (below).
+			className="settings-dialog-pop flex h-[620px] max-h-[85vh] w-[920px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl max-md:h-dvh max-md:max-h-none max-md:w-screen max-md:max-w-none max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)]"
 			onClick={(e) => e.stopPropagation()}
 		>
 			{/* Header — the app's quiet CMU title language. */}
@@ -299,21 +307,21 @@ export function SettingsDialogBody({
 					</Hint>
 			</header>
 
-			<div className="flex min-h-0 flex-1">
+			<div className="flex min-h-0 flex-1 max-md:flex-col">
 				{/* Left nav — text-only, the session-list mono language,
 					    active = bg-accent. */}
 				<nav
 					aria-label="Settings sections"
 					data-testid="settings-nav"
-					className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-2"
+					className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-2 max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b"
 				>
-					{SECTIONS.map((s) => (
+					{sections.map((s) => (
 						<button
 							key={s.id}
 							type="button"
 							data-testid={`settings-nav-${s.id}`}
 							aria-current={active === s.id}
-							className={`rounded-sm px-3 py-1.5 text-left font-ui text-sm transition-colors ${
+							className={`shrink-0 rounded-sm px-3 py-1.5 text-left font-ui text-sm transition-colors ${
 								active === s.id
 									? "bg-accent text-foreground"
 									: "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -375,9 +383,14 @@ export function SettingsDialogBody({
 									</SettingsRow>
 								</SettingsSection>
 							)}
-							{active === "keys" && (
+							{active === "keys" && keysAllowed && (
 								<SettingsSection title="Keys" testid="section-keys">
 									<KeysSection initialRow={initialRow ?? undefined} />
+								</SettingsSection>
+							)}
+							{active === "keys" && !keysAllowed && account?.cloud && (
+								<SettingsSection title="Keys" testid="section-keys">
+									<p className="px-1 text-sm text-muted-foreground">API keys on this server are managed by your admin.</p>
 								</SettingsSection>
 							)}
 							{active === "agent" && (

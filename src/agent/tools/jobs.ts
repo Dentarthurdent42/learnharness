@@ -1,4 +1,5 @@
 import { Type, type Static } from "typebox";
+import { localFileToolsEnabled } from "./fs-shared.ts";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { serverExecute } from "../tool-execute.ts";
 import type { JobRecord } from "../../core/contracts.ts";
@@ -162,13 +163,17 @@ export function jobTools(ctx: JobToolContext): Record<string, AgentTool<any>> {
 				dispatch(ctx, "visual", toolCallId, VISUAL_ACK, input),
 			),
 		},
-		pdf: {
-			name: "pdf",
-			label: "pdf",
-			description: PDF_DESCRIPTION,
-			parameters: pdfInputSchema,
-			execute: serverExecute("pdf", pdfInputSchema, (input, { toolCallId }) => dispatch(ctx, "pdf", toolCallId, PDF_ACK, input)),
-		},
+		// The pdf reader opens a LOCAL path — cloud mode drops it with the
+		// learner-filesystem set (fs-shared.ts localFileToolsEnabled).
+		...(localFileToolsEnabled && {
+			pdf: {
+				name: "pdf",
+				label: "pdf",
+				description: PDF_DESCRIPTION,
+				parameters: pdfInputSchema,
+				execute: serverExecute("pdf", pdfInputSchema, (input, { toolCallId }) => dispatch(ctx, "pdf", toolCallId, PDF_ACK, input)),
+			},
+		}),
 	};
 }
 

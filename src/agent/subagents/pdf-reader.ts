@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { localFileToolsEnabled } from "../tools/fs-shared.ts";
 import type { AssistantMessage, Message, ToolResultMessage, Usage, Tool } from "@earendil-works/pi-ai";
 import { normalizeContext } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -168,6 +169,12 @@ export async function runPdfReaderAgent(
 	const maxIterations = opts.maxIterations ?? MAX_ITERATIONS;
 	const pdfPath = input.path;
 
+	// Backstop for the cloud-mode drop (tools/jobs.ts): a pdf job that still
+	// reaches the runner (a pre-existing record, a crash-recovery respawn)
+	// never opens a server path.
+	if (!localFileToolsEnabled) {
+		return { path: pdfPath, question: input.question, brief: "PDF failed: reading local files is disabled on this server", pagesRead: [], pagesConsulted: [] };
+	}
 	// Deterministic upfront failure: unreadable / unparseable
 	// for renders — the brief never starts on a broken source.
 	const openError = await probeReadable(pdfPath);

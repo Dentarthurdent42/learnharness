@@ -3,6 +3,7 @@
 import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChatSession } from "@/components/session";
 import { visibleQueuedSteers } from "@/components/session-core";
+import { AllowanceNotice, useAllowance } from "@/components/allowance";
 import { SetupDialog } from "@/components/setup-dialog";
 import { Hint } from "@/components/ui/hint";
 import { useZeroKeys, ZeroKeysPill } from "@/components/setup-cta";
@@ -159,6 +160,19 @@ export function parseProviderKeyRefusal(message: string | undefined): boolean {
 		return body.code === "provider_key_missing" && typeof body.error === "string" && isProviderKeyRefusal(body.error);
 	} catch {
 		return false;
+	}
+}
+
+/** Cloud mode's turn refusals (server/allowance.ts): the 429/403 body
+ *  rides the error message verbatim, like the BYOK envelopes. Exported
+ *  pure for tests. */
+export function parseAllowanceRefusal(message: string | undefined): "allowance_exhausted" | "model_unavailable" | null {
+	if (!message) return null;
+	try {
+		const body = JSON.parse(message) as { code?: unknown };
+		return body.code === "allowance_exhausted" || body.code === "model_unavailable" ? body.code : null;
+	} catch {
+		return null;
 	}
 }
 
@@ -571,6 +585,9 @@ export function Chat({
 			.catch(() => {});
 	});
 	const [setupOpen, setSetupOpen] = useState(false);
+	// Cloud mode: the allowance meter's refresh + a model refusal's line.
+	const { refresh: refreshAllowance } = useAllowance();
+	const [allowanceRefusal, setAllowanceRefusal] = useState<string | null>(null);
 	/** The last explicitly-sent draft (composer send): the
 	 *  refusal flow restores it into the composer, where it waits for the
 	 *  learner to re-send (Save never auto-sends, owner 2026-10-09).
@@ -594,7 +611,11 @@ export function Chat({
 		// provider key is gone gets the SAME treatment — revert-draft and
 		// open setup (the dialog derives to its first-key stage on its own).
 		const keyRefused = parseProviderKeyRefusal(error.message);
-		if (!missing && !keyRefused) return; // a real error keeps the honest banner
+		// Cloud mode's allowance / model refusals (server/allowance.ts): the
+		// same revert-the-orphan flow, but the notice above the composer (or
+		// the model picker) explains — no setup dialog, no banner.
+		const allowanceRefused = parseAllowanceRefusal(error.message);
+		if (!missing && !keyRefused && !allowanceRefused) return; // a real error keeps the honest banner
 		// ORDER MATTERS: clearError() flips this effect's own dep (`error`)
 		// and would cancel the in-flight work below — so the banner dismiss,
 		// the draft restore, and the dialog open all land TOGETHER after the
@@ -612,6 +633,11 @@ export function Chat({
 				draftRef.current = null;
 			}
 			clearError();
+			if (allowanceRefused) {
+				refreshAllowance();
+				if (allowanceRefused === "model_unavailable") setAllowanceRefusal("This session's model isn't available on this server. Pick another model for it.");
+				return;
+			}
 			setSetupOpen(true);
 		})();
 		return () => {
@@ -1125,6 +1151,7 @@ export function Chat({
 	});
 
 	const onSend = () => {
+		setAllowanceRefusal(null);
 		if (pending || compacting) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
@@ -1576,6 +1603,11 @@ export function Chat({
 									Something went wrong: {error.message}
 								</div>
 							)}
+							{allowanceRefusal && (
+								<div className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground" data-testid="model-refusal">
+									{allowanceRefusal}
+								</div>
+							)}
 						</div>
 
 						{/* The dock's reserved tail (DockOverlay reports its height):
@@ -1609,7 +1641,10 @@ export function Chat({
 					dictationCancel={dictation.cancel}
 					queuedSteers={visibleQueuedSteers(steerQueue, nativeMessages)}
 					setupCta={
-						zeroKeys ? (
+						<>
+						{/* Cloud mode: the allowance notice (components/allowance.tsx). */}
+						<AllowanceNotice chatId={chatId} />
+						{zeroKeys ? (
 							<ZeroKeysPill onOpen={() => setSetupOpen(true)} />
 						) : (
 							!configured && (
@@ -1624,7 +1659,8 @@ export function Chat({
 									</button>
 								</div>
 							)
-						)
+						)}
+						</>
 					}
 					composer={
 						<Composer

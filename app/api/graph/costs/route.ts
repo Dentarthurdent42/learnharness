@@ -10,10 +10,13 @@
  * Scope (user-decided): the graph pipeline ONLY — teaching turns and
  * sub-agent jobs have their own cost channels elsewhere.
  */
-import { graphCosts } from "@/src/server";
+import { graphCosts, withUser } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function handleGET() {
 	return Response.json(graphCosts());
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);

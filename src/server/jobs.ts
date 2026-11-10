@@ -69,6 +69,7 @@ import { fireJobAbort, isJobLive } from "../agent/subagents/aborts.ts";
 import { stores } from "./stores.ts";
 import { isTurnRunning } from "./turn-liveness.ts";
 import type { Agent } from "@earendil-works/pi-agent-core";
+import { CLOUD_MODE, ScopedMap, ScopedSet, scopedKey } from "../../tenancy.ts";
 
 /** Fires one server-side teacher turn: (chatId, input) → HTTP-ish status.
  *  Wave C: the input is the IDLE WAKE — every queued marker as the turn's
@@ -111,15 +112,51 @@ interface WakeState {
 	pumping: Set<string>;
 	/** Throttle bookkeeping for the stale-job sweep. */
 	lastSweepAt: number;
+	/** The per-user sweep throttle (cloud mode; keyed scopedKey("")) —
+	 *  desktop keeps lastSweepAt. */
+	sweptAt: Map<string, number>;
 }
 
 interface LhWakeGlobal {
 	__lhWakePipeline?: WakeState;
 }
 
-function state(): WakeState {
+function rawState(): WakeState {
 	const g = globalThis as typeof globalThis & LhWakeGlobal;
-	return (g.__lhWakePipeline ??= { queues: new Map(), liveAgents: new Map(), userSteers: new Map(), pumping: new Set(), lastSweepAt: 0 });
+	return (g.__lhWakePipeline ??= { queues: new Map(), liveAgents: new Map(), userSteers: new Map(), pumping: new Set(), lastSweepAt: 0, sweptAt: new Map() });
+}
+
+/** The pipeline as the CURRENT USER sees it (tenancy.ts): every chat-keyed
+ *  registry is namespaced by user in cloud mode, and the sweep throttle is
+ *  per user (each user's recovery sweep runs in their own scope). The two
+ *  wiring hooks are process-wide by nature. Desktop: the plain state. */
+function state() {
+	const raw = rawState();
+	return {
+		get turnRunner() {
+			return raw.turnRunner;
+		},
+		set turnRunner(v: TurnRunner | undefined) {
+			raw.turnRunner = v;
+		},
+		get respawn() {
+			return raw.respawn;
+		},
+		set respawn(v: JobRespawn | undefined) {
+			raw.respawn = v;
+		},
+		queues: new ScopedMap(raw.queues),
+		userSteers: new ScopedMap(raw.userSteers),
+		liveAgents: new ScopedMap(raw.liveAgents),
+		pumping: new ScopedSet(raw.pumping),
+		get lastSweepAt() {
+			return CLOUD_MODE ? (raw.sweptAt.get(scopedKey("")) ?? 0) : raw.lastSweepAt;
+		},
+		set lastSweepAt(v: number) {
+			if (CLOUD_MODE) raw.sweptAt.set(scopedKey(""), v);
+			else raw.lastSweepAt = v;
+		},
+	};
 }
 
 /** chat-handler wires this at module init: its adapter around handleChatRequest. */

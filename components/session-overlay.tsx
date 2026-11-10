@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { MaximizeIcon, MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePinchZoom } from "@/components/use-pinch";
 import { fitGraphView, fitZoomFor, zoomedGraphView, type Viewport } from "@/components/pan-zoom";
 import { renderMermaid } from "@/components/mermaid-render";
 import { MermaidError } from "@/components/mermaid-error";
@@ -170,12 +171,18 @@ export function MermaidOverlay({
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
 	}, [fitZoom, box, size]);
+	// Touch (iPhone wave): a two-finger pinch zooms like a wheel tick.
+	const pinching = usePinchZoom(viewportRef, (factor, center) => {
+		setView((v) => zoomedGraphView(v, factor, fitZoom, center, box, size));
+		userAdjustedRef.current = true;
+	});
 
 	const dragRef = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
 	const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
 		if (e.button !== 0) return;
 		if ((e.target as HTMLElement).closest("button")) return;
 		if (atFloor) return;
+		if (dragRef.current) return; // a second finger — the pinch owns it
 		dragRef.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y, moved: false };
 		setPanning(true);
 		e.currentTarget.classList.add("cursor-grabbing");
@@ -184,6 +191,11 @@ export function MermaidOverlay({
 	const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
 		const d = dragRef.current;
 		if (!d) return;
+		if (pinching.current) {
+			// A pinch took over: drop the one-finger pan (its origin is stale).
+			dragRef.current = null;
+			return;
+		}
 		d.moved = true;
 		setView((v) =>
 			v.zoom <= fitZoom + 1e-9 ? v : { ...v, x: d.x + (e.clientX - d.px), y: d.y + (e.clientY - d.py) },
@@ -287,7 +299,7 @@ export function MermaidOverlay({
 							/>
 						</div>
 						<div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-2">
-							<span className="text-xs text-muted-foreground/60">Drag to pan · scroll to zoom</span>
+							<span className="text-xs text-muted-foreground/60"><span className="max-md:hidden">Drag to pan · scroll to zoom</span><span className="md:hidden">Drag to pan · pinch to zoom</span></span>
 							<div className="flex gap-1">
 								<Hint label="Zoom out" side="bottom">
 <button

@@ -75,3 +75,6 @@ export * from "./coverage.ts";
 // ONE session→markdown formatter — the extractor's view and the user-facing
 // export share it. Pure, browser-safe.
 export * from "./session-markdown.ts";
+// allowance.ts (cloud mode, 2026-11): the fading-spend allowance math —
+// pure, browser-safe (the meter's levels and the server's turn gate).
+export * from "./allowance.ts";

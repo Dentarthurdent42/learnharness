@@ -25,13 +25,7 @@
  * (PUT /api/settings/agent) — file presence alone is never the override.
  */
 
-import {
-	allSegmentPaths,
-	isValidSegmentPath,
-	promptOverrides,
-	readSettingsRecord,
-	writeSettingsRecord,
-} from "@/src/server";
+import { allSegmentPaths, isValidSegmentPath, promptOverrides, readSettingsRecord, withUser, writeSettingsRecord } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +36,7 @@ function segmentPathFrom(segments: string[]): string | null {
 	return isValidSegmentPath(joined) ? joined : null;
 }
 
-export async function PUT(request: Request, ctx: { params: Promise<{ segment: string[] }> }) {
+async function handlePUT(request: Request, ctx: { params: Promise<{ segment: string[] }> }) {
 	const { segment } = await ctx.params;
 	const path = segmentPathFrom(segment);
 	if (!path) return Response.json({ error: "invalid segment path" }, { status: 400 });
@@ -60,7 +54,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ segment: st
 	return Response.json({ path, text: body.text });
 }
 
-export async function DELETE(_request: Request, ctx: { params: Promise<{ segment: string[] }> }) {
+async function handleDELETE(_request: Request, ctx: { params: Promise<{ segment: string[] }> }) {
 	const { segment } = await ctx.params;
 	const path = segmentPathFrom(segment);
 	if (!path) return Response.json({ error: "invalid segment path" }, { status: 400 });
@@ -78,3 +72,7 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ segment
 	// (additive; the GET view derives the same truth from record+file).
 	return Response.json({ path, deleted: true, switchCleared: hadSwitch });
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const PUT = withUser(handlePUT);
+export const DELETE = withUser(handleDELETE);

@@ -12,15 +12,15 @@
  * Every body is passed through sanitizeRenderSettings (src/core) before
  * touching disk: garbage clamps or falls back to defaults, never throws.
  */
-import { readRenderSettings, writeRenderSettings } from "@/src/server";
+import { readRenderSettings, withUser, writeRenderSettings } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function handleGET() {
 	return Response.json(readRenderSettings());
 }
 
-export async function PUT(request: Request) {
+async function handlePUT(request: Request) {
 	let body: unknown;
 	try {
 		body = await request.json();
@@ -29,3 +29,7 @@ export async function PUT(request: Request) {
 	}
 	return Response.json(writeRenderSettings(body));
 }
+
+// Cloud mode: signed-in users only, run in their data scope (src/server/auth.ts).
+export const GET = withUser(handleGET);
+export const PUT = withUser(handlePUT);

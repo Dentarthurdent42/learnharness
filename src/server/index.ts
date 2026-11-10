@@ -43,3 +43,9 @@ export * from "./compaction.ts";
 export { runPiTurn, piTurnResponse, type PiTurnHandle, type PiTurnSpec } from "./pi/ui-stream.ts";
 export * from "./observability.ts";
 export * from "./model-catalog.ts";
+
+// Cloud mode (2026-11): the auth gate + the account store behind the
+// sign-in, invite/reset and admin routes.
+export * from "./auth.ts";
+export * from "./allowance.ts";
+export * from "../store/accounts.ts";

@@ -7,6 +7,8 @@
  * composition root (src/server/stores.ts); nothing else constructs it.
  */
 
+import { CLOUD_MODE } from "../../tenancy.ts";
+import { appendSpend } from "./spend.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { PATHS } from "../../config.ts";
@@ -138,10 +140,12 @@ function saveMessages(id: string, messages: LhMessage[]): void {
 function appendTurnUsage(id: string, entry: TurnUsage): void {
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
-	record.turns = record.turns?.some((t) => t.id === entry.id)
-		? record.turns
-		: [...(record.turns ?? []), entry];
+	const fresh = !record.turns?.some((t) => t.id === entry.id);
+	record.turns = fresh ? [...(record.turns ?? []), entry] : record.turns;
 	writeChat(record);
+	// Cloud mode: the allowance's own ledger (store/spend.ts) — appended
+	// once per turn, and outliving the session if it is deleted.
+	if (fresh && CLOUD_MODE) appendSpend(entry);
 }
 
 /** Append one extraction-run usage entry to the record's extractions

@@ -23,6 +23,7 @@ import { readTool } from "./tools/read.ts";
 import { lsTool } from "./tools/ls.ts";
 import { findTool } from "./tools/find.ts";
 import { grepTool } from "./tools/grep.ts";
+import { learnerFsTools } from "./tools/fs-shared.ts";
 import { healToolRecord } from "./tools/heal.ts";
 import type { GraphStore } from "../core/ports.ts";
 
@@ -323,10 +324,8 @@ export function createProberTools(
 				// The learner-filesystem set is always-on (user-decided 2026-09,
 				// sources v1): the prober inspects and LOCATES learner-referenced
 				// files while assessing the edge. Read-only by construction.
-				read: readTool,
-				ls: lsTool,
-				find: findTool,
-				grep: grepTool,
+				// Cloud mode drops the set (fs-shared.ts learnerFsTools).
+				...learnerFsTools({ read: readTool, ls: lsTool, find: findTool, grep: grepTool }),
 				// Job dispatch in the probe phase (owner ruling, 2026-09-20):
 				// research + pdf are ALWAYS available in every phase — the
 				// prober can verify facts or read learner PDFs while assessing.
@@ -335,7 +334,7 @@ export function createProberTools(
 				// research subject to the searchAvailable gate (honestly absent
 				// when no engine is live).
 				...(jobs.research ? { research: jobs.research } : {}),
-				pdf: jobs.pdf!,
+				...(jobs.pdf ? { pdf: jobs.pdf } : {}),
 				// The map reader (wave 7): present only when the settings gate
 				// opened — same registration-time drop as the search gate.
 				...(ctx.graphStore
@@ -457,10 +456,8 @@ export function createTeacherTools(
 			// sources v1): the teacher locates and reads learner-referenced
 			// files on its own terms — nothing auto-injects. Read-only by
 			// construction (fs-shared.ts).
-			read: readTool,
-			ls: lsTool,
-			find: findTool,
-			grep: grepTool,
+			// Cloud mode drops the set (fs-shared.ts learnerFsTools).
+			...learnerFsTools({ read: readTool, ls: lsTool, find: findTool, grep: grepTool }),
 			...planTools(ctx),
 			// Fix wave (2026-09-20): searchAvailable was RECEIVED here but
 			// DROPPED when building the inner JobToolContext — the drop-gate
