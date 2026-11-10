@@ -3,7 +3,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { invalidInputResult, questionResult, serverExecute } from "./tool-execute.ts";
 import {
 	askInputSchema,
-	askOptionProblems,
+	askInputProblems,
 	explainInputBase,
 	explainInputObject,
 	explainInputProblems,
@@ -40,7 +40,7 @@ export type { ProbeDoneContext } from "./tools/probe.ts";
  *
  * - Question tools (quiz / ask_user_question): CLIENT-ANSWERED. Their
  *   execute validates the authoring refinements (the cross-field rules no
- *   schema carries — quizInputProblems / askOptionProblems; a failure
+ *   schema carries — quizInputProblems / askInputProblems; a failure
  *   throws ToolInputError, which pi's loop converts to an error tool
  *   result the model retries on), then returns the synthetic
  *   "question posed" placeholder (questionResult: terminate: true — the
@@ -89,7 +89,7 @@ export const askUserQuestionTool: AgentTool<typeof askInputSchema> = {
 	prepareArguments: prepareQuestionArguments,
 	executionMode: "sequential",
 	execute: async (_toolCallId, input) => {
-		const problems = askOptionProblems(input.options ?? []);
+		const problems = askInputProblems(input);
 		if (problems.length > 0) return invalidInputResult("ask_user_question", problems);
 		return questionResult();
 	},

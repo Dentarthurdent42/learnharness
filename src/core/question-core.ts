@@ -107,6 +107,23 @@ export function askOptionProblems(options: Array<{ label: string; value?: string
 	return optionProblems(options).problems;
 }
 
+/** The ask authoring contract (2026-11): option sanity, plus — a
+ *  multi-select question needs options to select from. Without them the
+ *  dock can only fall back to a free-text box under a "pick all that
+ *  apply" prompt (seen live with GLM); bouncing the call lets the model
+ *  re-send it with the options it forgot. */
+export function askInputProblems(input: {
+	options?: Array<{ label: string; value?: string }>;
+	multiSelect?: boolean;
+}): string[] {
+	const options = input.options ?? [];
+	const problems = askOptionProblems(options);
+	if (input.multiSelect === true && options.length === 0) {
+		problems.push("multiSelect is true but there are no options — give the options to choose from, or drop multiSelect for a free-text answer.");
+	}
+	return problems;
+}
+
 /** The full quiz authoring contract: option sanity + correctAnswer must be
  *  gradeable. Empty result = a quiz the dock can arm and grade faithfully. */
 export function quizInputProblems(input: {
