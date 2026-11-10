@@ -33,6 +33,18 @@ import {
 
 export type SessionStatus = "ready" | "submitted" | "streaming" | "error";
 
+/** Waits before each automatic reattach after a dropped stream (5 tries,
+ *  ~30s in all); exported for tests. */
+export const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000] as const;
+
+/** A dropped connection, as every browser reports it: fetch and body
+ *  reads reject with a TypeError ("Load failed" in Safari, "Failed to
+ *  fetch" / "network error" in Chromium, "NetworkError…" in Firefox).
+ *  Server refusals and stream errors arrive as plain Errors. */
+export function isNetworkError(err: unknown): boolean {
+	return err instanceof TypeError || (err as { name?: string } | null)?.name === "TypeError";
+}
+
 /** How often to poll turnInFlight while a racing turn runs (409 retry). */
 export const TURN_POLL_MS = 500;
 /** Give up waiting (a wake turn can run long) and surface the 409. */
@@ -227,6 +239,15 @@ export class SessionModel {
 	// The single live consume (POST response or reattach stream): a newer
 	// consume cancels the older — one reader at a time.
 	private consumeAbort: AbortController | null = null;
+	// AUTO-RECONNECT (owner, 2026-11 — iPhone): a dropped live view (screen
+	// lock, app switch, a network blip; Safari says "Load failed") reattaches
+	// on its own with backoff instead of stranding the turn behind an error
+	// banner. The turn runs server-side regardless; this only rejoins it.
+	private reconnectAttempt = 0;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	/** The current error is a dropped connection we gave up on (the page's
+	 *  return-to-app hook retries it — reconnectIfDropped). */
+	private droppedConnection = false;
 	/** Synchronous ready check for the gate (send/read mount logic). */
 	readyRef = true;
 
@@ -442,6 +463,8 @@ export class SessionModel {
 				const acted = this.applyWireEvent(event);
 				if (!sawEvent && acted) {
 					sawEvent = true;
+					// Events are flowing: a later drop gets the full backoff again.
+					this.reconnectAttempt = 0;
 					if (this.statusValue !== "error") this.setStatus("streaming");
 				}
 			}
@@ -519,11 +542,41 @@ export class SessionModel {
 			});
 			if (!res.ok) throw new Error((await res.text()) || "Failed to attach to the running turn.");
 			await this.consumeStream(res);
+			this.reconnectAttempt = 0; // the stream ran to its end
 		} catch (err) {
 			if ((err as Error).name === "AbortError") return; // a newer consume won
+			if (isNetworkError(err) && this.consumeAbort === controller) {
+				if (this.reconnectAttempt < RECONNECT_DELAYS_MS.length) {
+					// Stay busy (no banner) and rejoin the turn after a short wait;
+					// a stop() or newer consume in the meantime cancels it.
+					const delay = RECONNECT_DELAYS_MS[this.reconnectAttempt++]!;
+					this.setError(null);
+					this.setStatus("submitted");
+					this.reconnectTimer = setTimeout(() => {
+						this.reconnectTimer = null;
+						if (this.consumeAbort === controller) void this.resumeStream(true);
+					}, delay);
+					return;
+				}
+				this.droppedConnection = true;
+			}
+			this.reconnectAttempt = 0;
 			this.setError((err as Error).message);
 			this.setStatus("error");
 		}
+	}
+
+	/**
+	 * Back in the app (or back online) after the reconnect attempts gave
+	 * up: try again from the start of the backoff. A no-op unless the
+	 * current error is a dropped connection.
+	 */
+	reconnectIfDropped(): void {
+		if (!this.droppedConnection || this.statusValue !== "error") return;
+		this.droppedConnection = false;
+		this.reconnectAttempt = 0;
+		this.setError(null);
+		void this.resumeStream(true);
 	}
 
 	/**
@@ -704,6 +757,10 @@ export class SessionModel {
 	stop(): void {
 		this.consumeAbort?.abort();
 		this.consumeAbort = null;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = null;
+		this.reconnectAttempt = 0;
+		this.droppedConnection = false;
 		this.streamingIds = new Set();
 		this.streamingMessageId = null;
 		this.executions = new Map();

@@ -71,6 +71,21 @@ export function useChatSession({ chatId, initialMessages, initiallyInFlight }: U
 		};
 	}, [initiallyInFlight, model]);
 
+	// Back in the app, or back online, after a dropped connection the
+	// automatic reconnect gave up on: try again (session-core's
+	// reconnectIfDropped is a no-op otherwise).
+	useEffect(() => {
+		const retry = () => {
+			if (document.visibilityState === "visible") model.reconnectIfDropped();
+		};
+		document.addEventListener("visibilitychange", retry);
+		window.addEventListener("online", retry);
+		return () => {
+			document.removeEventListener("visibilitychange", retry);
+			window.removeEventListener("online", retry);
+		};
+	}, [model]);
+
 	// The view + state, derived per model change from the model.
 	const state = useMemo<SessionState>(() => model.getState(), [model, version] as const);
 
