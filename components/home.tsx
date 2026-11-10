@@ -157,7 +157,7 @@ export function Home({
 	};
 
 	return (
-		<div className="relative h-dvh">
+		<div className="relative h-full">
 			{/* Window-drag strip (merged chrome, owner 2026-09-17): a dedicated
 			    mask element, deliberately FIRST in the DOM. Electron's app-region
 			    mask resolves by DOM order — a no-drag element subtracts only drag
