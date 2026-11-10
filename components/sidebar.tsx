@@ -1000,7 +1000,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	return (
 		<SettingsDialogProvider>
 			<SessionsSidebar />
-			<main className="min-w-0 flex-1">{children}</main>
+			{/* Pages fill THIS box (h-full), never the screen (h-dvh): the frame
+			    above pads for the notch and home bar, so a page sized to the
+			    screen overflowed by those insets as a Home Screen app. */}
+			<main className="min-h-0 min-w-0 flex-1">{children}</main>
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only
 			    matters for the events it dispatches, never for DOM priority. */}
