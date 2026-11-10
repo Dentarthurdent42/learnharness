@@ -2036,6 +2036,13 @@ function DockOverlay({
 	// off absurdly short — the cap is now the AVAILABLE COLUMN (the
 	// scroller already starts below the top bar) minus a 2rem breathing
 	// gap, carried as --dock-max-h for the docks' scroll areas.
+	// The rest of the dock (the thinking field, the stats bar — everything
+	// but the scroll area, [data-dock-scroll]) comes off the cap too (phone
+	// fix, 2026-11): on a short screen the area alone filled the column, the
+	// whole dock outgrew it, and the question's opening lines sat under the
+	// top bar where no scroll could reach them. Re-measured when the dock
+	// resizes; the overhead excludes the area itself, so this settles in
+	// one pass.
 	const [sbInset, setSbInset] = useState(0);
 	const [dockMaxH, setDockMaxH] = useState<number | null>(null);
 	useEffect(() => {
@@ -2043,11 +2050,19 @@ function DockOverlay({
 		if (!el) return;
 		const measure = () => {
 			setSbInset(Math.round((el.offsetWidth - el.clientWidth) / 2));
-			setDockMaxH(Math.max(el.clientHeight - 32, 160));
+			const block = blockRef.current;
+			const area = block?.querySelector<HTMLElement>("[data-dock-scroll]");
+			const overhead = block && area ? block.offsetHeight - area.offsetHeight : 0;
+			setDockMaxH(Math.max(el.clientHeight - 32 - overhead, 160));
 		};
 		measure();
 		window.addEventListener("resize", measure);
-		return () => window.removeEventListener("resize", measure);
+		const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+		if (ro && blockRef.current) ro.observe(blockRef.current);
+		return () => {
+			window.removeEventListener("resize", measure);
+			ro?.disconnect();
+		};
 	}, [scrollRef]);
 
 	// GROWTH MUTE (owner round, 2026-10-05 — the generation churn): during a
