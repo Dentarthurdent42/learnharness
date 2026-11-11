@@ -32,3 +32,26 @@ On Fly, you can also read the file directly:
 ```sh
 fly ssh console -C "tail -n 20 /data/errors/errors.jsonl"
 ```
+
+## GitHub issues
+
+When configured, the server opens a GitHub issue for each error fingerprint that matters, in a **private** repo. The app repo is public and entries can contain learner content, so issues never go there.
+
+A fingerprint is filed when it has happened 3 times (in any chats), or right away when an occurrence was unrecovered. After that:
+
+- Repeats never open a new issue. At most once an hour, the issue gets a "seen again" comment with the new count and the latest occurrence.
+- If a closed issue's error comes back, the issue is reopened and labeled `regression`, but only when the server was deployed after the issue was closed. Before that, the fix simply hasn't shipped yet.
+- At most 10 new issues are opened per hour.
+
+Issues are labeled `agent-error` (plus `unrecovered` when it applies). Each body starts with an `<!-- lh-error-fp:<fingerprint> -->` marker. Which fingerprint maps to which issue is saved in `<data>/errors/issues.json`.
+
+### Setup
+
+1. Create a private repo, e.g. `learnharness-errors`.
+2. Create a fine-grained personal access token with access to **only that repo** and the **Issues: Read and write** permission.
+3. Set both as Fly secrets:
+   ```sh
+   fly secrets set LH_ERROR_ISSUES_REPO=<owner>/learnharness-errors LH_ERROR_ISSUES_TOKEN=<token>
+   ```
+
+With either secret unset, nothing is filed and the error log still works.
