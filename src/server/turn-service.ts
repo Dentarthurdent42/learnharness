@@ -25,6 +25,7 @@ import { coverageOf } from "../core/coverage.ts";
 import type { ChatStore, GraphStore } from "../core/ports.ts";
 import type { ExtractionPipeline } from "../agent/subagents/extraction.ts";
 import { ModelsNotConfiguredError, ProviderKeyMissingError } from "../core/settings.ts";
+import { reportAgentError } from "./error-reporting.ts";
 
 /**
  * The canonical state write (Wave B, owner-approved 2026-09-26): append the
@@ -123,6 +124,7 @@ export function triggerExtraction(
 				return;
 			}
 			console.error(`[chat ${chatId}] extraction pipeline failed:`, err);
+			reportAgentError("extraction_failed", err, { chatId });
 		});
 	} catch (err) {
 		console.error(`[chat ${chatId}] extraction trigger failed:`, err);
