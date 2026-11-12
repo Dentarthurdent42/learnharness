@@ -40,6 +40,7 @@ import { applyParkedDismissal } from "./dismissal-park.ts";
 import { registerTurn, unregisterTurn } from "./turn-runs.ts";
 import { persistTurn, triggerExtraction } from "./turn-service.ts";
 import { reportAgentError, reportTurnErrors } from "./error-reporting.ts";
+import { startErrorIssueFiler } from "./error-issues.ts";
 import { hasProbeDone, danglingQuestionOf } from "../core/native-messages.ts";
 import { composeInstructions } from "../agent/teacher-agent.ts";
 import { ensureCompacted, kickCompaction, effectiveThresholdTokens } from "./compaction.ts";
@@ -137,6 +138,9 @@ function resolveEngine(role: ModelRole): PiEngine | undefined {
 }
 
 setJobRespawn((jobId) => void jobRunner.runJob(jobId));
+// Error issue filer (2026-11): a no-op unless LH_ERROR_ISSUES_TOKEN and
+// LH_ERROR_ISSUES_REPO are set (docs/agent-errors.md).
+startErrorIssueFiler();
 
 /** The route-facing entry: parse {chatId, input} and run one turn. */
 export async function handleChatRequest(
