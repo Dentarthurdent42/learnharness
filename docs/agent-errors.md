@@ -55,3 +55,9 @@ Issues are labeled `agent-error` (plus `unrecovered` when it applies). Each body
    ```
 
 With either secret unset, nothing is filed and the error log still works.
+
+## Nightly triage
+
+A scheduled Claude Code task runs once a night and follows [agent-error-triage.md](agent-error-triage.md). It takes up to 3 open `agent-error` issues, reproduces each as a failing test, fixes it, and opens a draft PR in this repo. It labels the issue `fix-proposed` (or `needs-decision` / `wontfix` when a fix isn't its call). It never merges, and it never copies issue contents into this public repo.
+
+The lifecycle: the server files an issue → the triage agent opens a draft PR → you review and merge → you deploy and close the issue → if the error comes back, the server reopens the issue as a `regression`.
