@@ -39,6 +39,7 @@ import { allowanceRefusal } from "./allowance.ts";
 import { applyParkedDismissal } from "./dismissal-park.ts";
 import { registerTurn, unregisterTurn } from "./turn-runs.ts";
 import { persistTurn, triggerExtraction } from "./turn-service.ts";
+import { reportAgentError, reportTurnErrors } from "./error-reporting.ts";
 import { hasProbeDone, danglingQuestionOf } from "../core/native-messages.ts";
 import { composeInstructions } from "../agent/teacher-agent.ts";
 import { ensureCompacted, kickCompaction, effectiveThresholdTokens } from "./compaction.ts";
@@ -461,12 +462,16 @@ export async function handleChatInput(
 			// transcript directly (the retry context the model saw).
 			onError: (error) => {
 				console.error(`[chat ${chatId}] turn error:`, error);
+				reportAgentError("stream_error", error, { chatId, model: modelId });
 				return "An error occurred.";
 			},
 			onFinish: (turnMessages, isAborted) => {
 				// Wave B: the record write is the agent's own final state —
 				// the new messages are the slice past the merged base.
 				const stamped = persistTurn(stores.chatStore, chatId, merged.length, turnMessages, isAborted);
+				// Error ledger (2026-11): every tool error / errored assistant
+				// message this turn persisted — the failures "Retrying…" hides.
+				reportTurnErrors(chatId, stamped);
 				// usage log append (idempotent per turn id) — the stats bar
 				// refolds this on the client after the turn settles. The
 				// provenance message is the turn's FIRST new assistant message.
@@ -573,6 +578,7 @@ export async function handleChatInput(
 		// turn here too - nothing was handed (the loop never ticked).
 		unregisterLiveAgent(chatId);
 		console.error(`[chat ${chatId}] turn failed to start:`, err);
+		reportAgentError("turn_start_failed", err, { chatId });
 		return Response.json({ error: "Failed to start the turn" }, { status: 500 });
 	}
 }

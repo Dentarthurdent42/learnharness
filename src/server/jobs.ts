@@ -67,6 +67,7 @@ import type { TurnInput } from "../core/input-events.ts";
 import { danglingQuestionOf, endsInDismissal, type LhMessage } from "../core/native-messages.ts";
 import { fireJobAbort, isJobLive } from "../agent/subagents/aborts.ts";
 import { stores } from "./stores.ts";
+import { reportAgentErrors } from "./error-reporting.ts";
 import { isTurnRunning } from "./turn-liveness.ts";
 import type { Agent } from "@earendil-works/pi-agent-core";
 import { CLOUD_MODE, ScopedMap, ScopedSet, scopedKey } from "../../tenancy.ts";
@@ -624,6 +625,19 @@ function finalizeJob(jobId: string): void {
 		status: failed ? "error" : "done",
 		activity: failed ? "failed" : "delivered",
 	});
+	if (failed) {
+		// Error ledger (2026-11): a sub-agent that delivered a failure.
+		const brief = (result as { brief?: unknown } | undefined)?.brief;
+		reportAgentErrors([
+			{
+				kind: "job_failed",
+				tool: job.kind,
+				message: typeof brief === "string" && brief ? brief : `The ${job.kind} sub-agent produced no output`,
+				chatId: job.chatId,
+				unrecovered: true,
+			},
+		]);
+	}
 }
 
 function failJob(jobId: string, err: Error): void {
@@ -633,6 +647,16 @@ function failJob(jobId: string, err: Error): void {
 	const job = stores.jobStore.getJob(jobId);
 	if (!job || job.status !== "running") return;
 	stores.jobStore.updateJob(jobId, { status: "error", error: err.message, activity: "delivery failed" });
+	reportAgentErrors([
+		{
+			kind: "job_failed",
+			tool: job.kind,
+			message: `Delivery failed: ${err.message}`,
+			...(err.stack ? { detail: err.stack } : {}),
+			chatId: job.chatId,
+			unrecovered: true,
+		},
+	]);
 }
 
 /**

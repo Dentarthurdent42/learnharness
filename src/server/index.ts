@@ -42,6 +42,8 @@ export * from "./dismissal-park.ts";
 export * from "./compaction.ts";
 export { runPiTurn, piTurnResponse, type PiTurnHandle, type PiTurnSpec } from "./pi/ui-stream.ts";
 export * from "./observability.ts";
+export { onAgentErrors, reportAgentErrors, reportAgentError } from "./error-reporting.ts";
+export { errorLedger, type ErrorGroup, type ErrorLedgerEntry } from "../store/error-ledger.ts";
 export * from "./model-catalog.ts";
 
 // Cloud mode (2026-11): the auth gate + the account store behind the
