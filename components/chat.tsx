@@ -49,7 +49,8 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, FlagIcon, WaypointsIcon } from "lucide-react";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -208,6 +209,19 @@ function isSubagentSteer(m: LhViewMessage): boolean {
  * never overlapping the transcript at rest, never covering the scrollbar —
  * and DockOverlay animates its height on variant changes.
  */
+/** The record message a turn-end report points at: the last text part's
+ *  source message (projectView's "<id>-t<n>" part ids). Undefined when the
+ *  turn has no text — the server then excerpts the chat's tail. */
+function lastSourceMessageId(parts: readonly { type: string; id?: string }[]): string | undefined {
+	for (let i = parts.length - 1; i >= 0; i--) {
+		const p = parts[i]!;
+		if (p.type !== "text") continue;
+		const id = textPartMessageId(p.id);
+		if (id) return id;
+	}
+	return undefined;
+}
+
 export function Chat({
 	chatId,
 	title,
@@ -376,6 +390,9 @@ export function Chat({
 	// the plan popup, or the setup dialog over a pending question must not
 	// dismiss the question underneath.
 	const [abortAsk, setAbortAsk] = useState<AbortMode | null>(null);
+	// The report dialog's target turn (null = closed).
+	const [reportAt, setReportAt] = useState<{ messageId?: string } | null>(null);
+	const closeReport = useCallback(() => setReportAt(null), []);
 	const abortAskRef = useRef<AbortMode | null>(null);
 	abortAskRef.current = abortAsk;
 	useEffect(() => {
@@ -1561,6 +1578,24 @@ export function Chat({
 										</MessageContent>
 									</Message>
 									)}
+									{/* USER REPORTS (2026-11, owner-approved): a quiet flag at the
+									    end of each FINISHED agent turn — the last assistant message
+									    before the next learner message, never on the turn still
+									    running. Always visible (phones have no hover). */}
+									{m.role === "assistant" &&
+									messages[mi + 1]?.role !== "assistant" &&
+									!(mi === messages.length - 1 && (status === "streaming" || status === "submitted" || turnInFlight)) ? (
+										<button
+											type="button"
+											aria-label="Report a problem"
+											title="Report a problem"
+											data-testid="report-turn"
+											onClick={() => setReportAt({ messageId: lastSourceMessageId(m.parts) })}
+											className="mb-2 flex items-center gap-1 font-ui text-xs text-muted-foreground/60 transition-colors hover:text-foreground"
+										>
+											<FlagIcon className="size-3" />
+										</button>
+									) : null}
 								</Fragment>
 							))}
 
@@ -1717,6 +1752,12 @@ export function Chat({
 				)}
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
+				<FeedbackDialog
+					open={reportAt !== null}
+					onClose={closeReport}
+					chatId={chatId}
+					{...(reportAt?.messageId ? { messageId: reportAt.messageId } : {})}
+				/>
 				</div>
 			</div>
 		</div>
