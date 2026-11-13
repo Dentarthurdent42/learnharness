@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fuzzyScore } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
+import { SidebarEdge, useDrawerDrag } from "@/components/sidebar-edge";
 import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 
@@ -430,6 +431,17 @@ function SessionsSidebar() {
 	}, []);
 	const pathname = usePathname();
 	const router = useRouter();
+	// Edge tap/click + phone swipe (sidebar-edge.tsx).
+	const asideRef = useRef<HTMLElement>(null);
+	const drawerDrag = useDrawerDrag({
+		open,
+		phone,
+		measure: () => asideRef.current?.offsetWidth ?? 0,
+		onOpen: () => {
+			if (!open) toggle();
+		},
+		onClose: close,
+	});
 	const { open: openSettings } = useSettingsDialog();
 
 	/* New session (owner, 2026-09-13): NO POST — the button opens the
@@ -684,11 +696,25 @@ function SessionsSidebar() {
 	return (
 		<>
 		{/* Phone: the drawer's backdrop — a tap anywhere outside closes it. */}
-		{phone && open && (
-			<div className="fixed inset-0 z-40 bg-black/60" aria-hidden onClick={close} data-testid="sidebar-backdrop" />
+		{phone && (open || drawerDrag.progress !== null) && (
+			<div
+				className={cn("fixed inset-0 z-40 touch-none bg-black/60", drawerDrag.progress === null && "transition-opacity duration-200")}
+				style={drawerDrag.progress === null ? undefined : { opacity: drawerDrag.progress }}
+				aria-hidden
+				onClick={close}
+				{...drawerDrag.drawerHandlers}
+				data-testid="sidebar-backdrop"
+			/>
 		)}
+		{/* Closed: the invisible left-edge strip — tap/click opens, a phone
+		    swipe from it drags the drawer out. */}
+		{!open && <SidebarEdge {...drawerDrag.edgeHandlers} />}
 		<aside
+			ref={asideRef}
+			{...drawerDrag.drawerHandlers}
+			style={drawerDrag.offset === null ? undefined : { translate: `${drawerDrag.offset}px 0`, transition: "none" }}
 			className={cn(
+				phone && "touch-pan-y",
 				phone
 					? "fixed inset-y-0 left-0 z-50 w-[min(18rem,85vw)] transition-transform duration-200 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] bg-background"
 					: "sidebar-motion shrink-0 overflow-hidden duration-200",
@@ -853,7 +879,7 @@ function SessionsSidebar() {
 					))}
 				</div>
 
-				<div ref={listRef} className="flex-1 overflow-y-auto p-2">
+				<div ref={listRef} className={cn("flex-1 overflow-y-auto p-2", phone && "touch-pan-y")}>
 					{shown === null ? (
 						<div className="px-2 py-4 text-xs text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (
