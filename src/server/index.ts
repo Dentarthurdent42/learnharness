@@ -44,6 +44,9 @@ export { runPiTurn, piTurnResponse, type PiTurnHandle, type PiTurnSpec } from ".
 export * from "./observability.ts";
 export { onAgentErrors, reportAgentErrors, reportAgentError } from "./error-reporting.ts";
 export { errorLedger, type ErrorGroup, type ErrorLedgerEntry } from "../store/error-ledger.ts";
+export { submitFeedback, FeedbackRateLimitError } from "./feedback.ts";
+export { feedbackStore, type FeedbackReport } from "../store/feedback.ts";
+export { parseFeedbackInput, FeedbackInputError } from "../core/feedback.ts";
 export * from "./model-catalog.ts";
 
 // Cloud mode (2026-11): the auth gate + the account store behind the

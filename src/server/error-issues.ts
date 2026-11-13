@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { DATA_ROOT } from "../../config.ts";
 import { errorLedger, type ErrorGroup, type ErrorLedger, type ErrorLedgerEntry } from "../store/error-ledger.ts";
 import { onAgentErrors } from "./error-reporting.ts";
+import { configuredGitHubRepo, createGitHubRepoClient } from "./github.ts";
 
 /**
  * THE ERROR ISSUE FILER (2026-11, stacked on the error ledger): turns
@@ -154,24 +155,8 @@ export function createErrorIssueFiler(deps: FilerDeps): ErrorIssueFiler {
 	const inFlight = new Set<string>();
 	const createdAt: number[] = [];
 
-	async function gh(method: string, url: string, body?: unknown): Promise<Record<string, unknown>> {
-		const res = await deps.fetch(`https://api.github.com/repos/${deps.repo}${url}`, {
-			method,
-			headers: {
-				Authorization: `Bearer ${deps.token}`,
-				Accept: "application/vnd.github+json",
-				"X-GitHub-Api-Version": "2022-11-28",
-				"User-Agent": "learnharness-error-filer",
-				...(body ? { "Content-Type": "application/json" } : {}),
-			},
-			...(body ? { body: JSON.stringify(body) } : {}),
-		});
-		if (!res.ok) {
-			const text = await res.text().catch(() => "");
-			throw new Error(`GitHub ${method} ${url} → ${res.status}: ${text.slice(0, 300)}`);
-		}
-		return (await res.json()) as Record<string, unknown>;
-	}
+	const client = createGitHubRepoClient({ token: deps.token, repo: deps.repo, fetch: deps.fetch });
+	const gh = (method: string, url: string, body?: unknown) => client.request(method, url, body);
 
 	async function fileOrUpdate(group: ErrorGroup): Promise<void> {
 		const state = readState(deps.stateFile);
@@ -245,13 +230,10 @@ interface LhIssueFilerGlobal {
 export function startErrorIssueFiler(): void {
 	const g = globalThis as typeof globalThis & LhIssueFilerGlobal;
 	if (g.__lhErrorIssueFiler) return;
-	const token = process.env.LH_ERROR_ISSUES_TOKEN;
-	const repo = process.env.LH_ERROR_ISSUES_REPO;
-	if (!token || !repo || process.env.NODE_ENV === "test") return;
-	if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
-		console.error(`[errors] LH_ERROR_ISSUES_REPO must be "owner/name", got ${JSON.stringify(repo)}`);
-		return;
-	}
+	const client = configuredGitHubRepo();
+	if (!client) return;
+	const token = process.env.LH_ERROR_ISSUES_TOKEN!;
+	const repo = client.repo;
 	g.__lhErrorIssueFiler = true;
 	const filer = createErrorIssueFiler({
 		token,
