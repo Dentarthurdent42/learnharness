@@ -78,3 +78,6 @@ export * from "./session-markdown.ts";
 // allowance.ts (cloud mode, 2026-11): the fading-spend allowance math —
 // pure, browser-safe (the meter's levels and the server's turn gate).
 export * from "./allowance.ts";
+// feedback.ts (user reports, 2026-11): report input validation + the
+// conversation excerpt — pure, browser-safe (the dialog reads its limits).
+export * from "./feedback.ts";

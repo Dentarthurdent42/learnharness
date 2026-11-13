@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from "lucide-react";
+import { DumbbellIcon, LogOutIcon, MessageSquareIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from "lucide-react";
 import { signOut, useAccount } from "@/components/account";
 import { useLongPress } from "@/components/long-press";
 import { AllowanceMeter } from "@/components/allowance";
@@ -1014,6 +1015,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
  *  nothing. */
 function AccountRows() {
 	const account = useAccount();
+	const [feedbackOpen, setFeedbackOpen] = useState(false);
+	const closeFeedback = useCallback(() => setFeedbackOpen(false), []);
 	if (!account?.cloud || !account.user) return null;
 	const row =
 		"flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
@@ -1026,6 +1029,12 @@ function AccountRows() {
 					Accounts
 				</Link>
 			)}
+			{/* USER REPORTS (2026-11): general feedback, no chat attached. */}
+			<button type="button" onClick={() => setFeedbackOpen(true)} className={row} data-testid="send-feedback">
+				<MessageSquareIcon className="size-3" />
+				Send feedback
+			</button>
+			<FeedbackDialog open={feedbackOpen} onClose={closeFeedback} />
 			<button type="button" onClick={() => void signOut()} className={row} data-testid="sign-out" title={`Signed in as ${account.user.username}`}>
 				<LogOutIcon className="size-3" />
 				Sign out
