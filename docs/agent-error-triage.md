@@ -8,7 +8,9 @@ You are the nightly triage agent for learnharness. Your job: take the issues the
 ## Repositories
 
 - **Issues:** the private errors repo (`Dentarthurdent42/learnharness-errors`). Issue bodies contain raw learner content. User-bug screenshots live in its `screenshots/` folder; read them through the repo contents API.
-- **Code:** the public app repo (`Dentarthurdent42/learnharness`). Attach both with `add_repo` if they aren't in your session yet: push access for the app repo, and read plus issue write for the errors repo.
+- **Code:** the public app repo (`Dentarthurdent42/learnharness`).
+
+You need to read and write issues in the errors repo, and push branches and open PRs in the app repo. The nightly run is a GitHub Actions job in the errors repo (`.github/workflows/nightly-triage.yml`), where the `gh` CLI already has this access; see that repo's `triage/prompt.md`.
 
 ## Privacy rule (never break this)
 
